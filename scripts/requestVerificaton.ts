@@ -1,9 +1,9 @@
 import flareLib = require("@flarenetwork/flare-periphery-contract-artifacts");
 import "dotenv/config";
-import { ethers } from 'hardhat';
+import { ethers, network } from 'hardhat';
 
 
-const { ATTESTATION_URL, ATTESTATION_API_KEY } = process.env;
+const { ATTESTATION_URL, ATTESTATION_API_KEY, USE_TESTNET_ATTESTATIONS } = process.env;
 
 // The same function can also be found in State Connector utils bundled with the artifact periphery package (`encodeAttestationName`)
 
@@ -15,6 +15,37 @@ function toHex(data: string): string {
     }
     return "0x" + result.padEnd(64, "0");
 }
+
+// Preset the networks
+const isTestnet = network.name === "coston" || ["false", undefined].includes(USE_TESTNET_ATTESTATIONS);
+const BTC_NAME = isTestnet ? "testBTC" : "BTC";
+const ETH_NAME = isTestnet ? "testETH" : "ETH";
+const XRP_NAME = isTestnet ? "testXRP" : "XRP";
+const DOGE_NAME = isTestnet ? "testDOGE" : "DOGE";
+
+const BTC_NETWORK = "btc";
+const ETH_NETWORK = "eth";
+const XRP_NETWORK = "xrp";
+const DOGE_NETWORK = "doge";
+
+interface AttestationResponse {
+    abiEncodedRequest: string;
+    status: string;
+}
+
+async function prepareAttestationRequest(attestationType: string, network: string, requestData: any): Promise<AttestationResponse> {
+    const response = await fetch(
+        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareRequest`,
+        {
+            method: "POST",
+            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
+            body: JSON.stringify(requestData)
+        }
+    );
+    const data = await response.json();
+    return data;
+}
+
 
 const BTC_TRANSACTION_ID = "0x" + "01c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d1";
 
