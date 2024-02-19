@@ -1,3 +1,10 @@
+# Generic state connector usage case
+
+This repository is a generic example of how to use the state connector to interact with the Flare Network.
+A simple BTC payment is proved, but general principles can be applied to any other connected chain.
+Read the full walkthrough in [blogpost](./blogpost.md).
+
+------
 # Flare Hardhat Starter Kit
 
 **IMPORTANT!!**
