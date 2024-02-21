@@ -26,6 +26,22 @@ Don't forget, verifying the proof is just the first part - this tells you, that 
 
 As usual, the whole block with full code is available in the [GitHub repository](TODO:LINK), and you are encouraged to follow if and try it out on your own.
 
+In the previous blog, we have seen, how the whole process works:
+1. Observe, that something you want has happened
+2. Prepare request for the attestation (using your attestation client api)
+3. Submit the request to the State Connector
+4. Wait for the State Connector to confirm the request
+5. Once the request is confirmed, prepare the response and use it
+  - Verify, that the response is really included in the state connector root (use the verification contract)
+  - Validate, that the response is the one you expect - correct payment, correct address...
+
+
+The process is the same for all the attestation types, so we will not be repeating the whole process for each type, but we will go through each of the types and see how to prepare the request for them and what we get in return.
+
+Remember, your best friend in that case is the `prepareResponse` endpoint, which returns the full response - without the proof.
+But this is enough to get the idea on how response looks and see that you get all the correct information.
+
+
 ## Attestation types
 
 The first step is to prepare the request for the attestation.

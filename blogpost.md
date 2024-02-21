@@ -732,7 +732,8 @@ To make your life easier in the future, all the important links and resources ar
 
 ## Additional useful methods
 
-We have shown how you can request the attestation and then use the response, but sometimes you might want to get just the response without the proof or anything - it makes it easier to debug and work with.
+We have shown how you can request the attestation and then use the response, but sometimes you might want to get just the response without the proof (there is no proof or round to speak about) or anything related to the State Connector confirmation procedure.
+But it gives you the same data as you would get from the State Connector, so you can use it to debug and verify the data you are getting from the State Connector.
 
 To achieve this, just query the `prepareResponse` endpoint with the same data as `prepareRequest`.
 In that case, you will get only the response part, but this is enough, to see if the response is correct and verify locally, that that is really the one you want to have proven.
