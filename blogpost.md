@@ -501,6 +501,27 @@ This is exactly what the `ResponseBody` contains, let's dig in.
 Transaction hash is not included in the response body, as it is already included in the request body (we don't want to unnecessarily repeat the data), but as it is part of the request body, it is also part of the Merkle proof (as the Merkle proof is constructed from the whole structure).
 Keep in mind, that if you want to use this proof on chain (users want to purchase something), you might want to make sure, that you do not allow them to use the same proof twice (e.g., by checking that the transaction hash is not already used in your contract - unless the sender is different).
 
+### Type structure
+
+Let's examine the `Payment` interface in details.
+Each of the attestation types we will see in the future will have the same form, so it is important to understand it.
+There are at least 5 parts of the interface:
+- `Request` - the request structure, having the `attestationType`, `sourceId`, `messageIntegrityCode` and `requestBody`.
+The first three fields are the same for all attestation types, while the `requestBody` is specific to the attestation type.
+In our case, the request body contains exactly the things we requested in the first place - the transaction hash and the utxo indices.
+And if you look closely, the unpacking of the request we made to the state connector (the 6 lines) is exactly abi encoded version of the `requestBody` part of the `Request` structure.
+This is also exactly how it is generated in the attestation client and it also makes it easy for attestation providers to unpack it, by taking the first field, the rest of the date is decoded by simply parsing the correct type.
+- `Response` is the full response structure.
+Again, the first four fields are the same for all attestation types, while the `responseBody` is specific to the attestation type.
+The first two fields identify the attestation request and chain. `votingRound` allows us to check in which round the request was submitted (important to get the correct merkle root with which to check the proof). While the `lowestUsedTimestamp` is the lowest timestamp used to generate the response.
+- `Proof` is the full structure we pass around. It contains the `Response` (which in turn also contains the `Request` - apart from knowing the result it also make sense to know what information exactly was requested) and the `merkleProof`, a list of merkle hashes that prove that the response is included in the merkle tree designated by the `votingRound` in the `Response`.
+- `RequestBody` is the structure of the request body.
+This one is specific to the attestation type and contains the data that is used to construct the response.
+You can make it as complex as you want, but it is important to keep it as simple as possible, as nested structures are harder (and much more expensive) to work with.
+- `ResponseBody` is the structure of the response body.
+This one is specific to the attestation type and contains the data you want to use on chain.
+You can make it as complicated as possible - add lists, nested structures, etc, but it is important to keep it as simple as possible, as nested structures are harder (and much more expensive) to work with.
+
 ## Submitting Merkle proof
 
 The usual interaction a contract on the Flare chain will have will consist of two parts
@@ -708,3 +729,71 @@ To make your life easier in the future, all the important links and resources ar
 -   State connector specification [repo](https://git.aflabs.org/flare-external/state-connector-protocol-public/-/tree/main).
 -   Demo repository containing all the code from this blog [repo](https://github.com/flare-foundation/flare-demo-examples).
 -   Current deployment of the State Connector on Coston testnet [0x0c13aDA1C7143Cf0a0795FFaB93eEBb6FAD6e4e3](https://coston-explorer.flare.network/address/0x0c13aDA1C7143Cf0a0795FFaB93eEBb6FAD6e4e3).
+
+## Additional useful methods
+
+We have shown how you can request the attestation and then use the response, but sometimes you might want to get just the response without the proof or anything - it makes it easier to debug and work with.
+
+To achieve this, just query the `prepareResponse` endpoint with the same data as `prepareRequest`.
+In that case, you will get only the response part, but this is enough, to see if the response is correct and verify locally, that that is really the one you want to have proven.
+
+```typescript
+async function getPreparedResponse() {
+    const attestationType = toHex("Payment");
+    const sourceType = toHex("testBTC");
+    // Attestation Request object to be sent to API endpoint
+    const requestData = {
+        "attestationType": attestationType,
+        "sourceId": sourceType,
+        "requestBody": {
+            "transactionId": BTC_TRANSACTION_ID,
+            "inUtxo": "8",
+            "utxo": "4"
+        }
+    }
+
+    const response = await fetch(
+        `${ATTESTATION_URL}/verifier/btc/Payment/prepareResponse`,
+        {
+            method: "POST",
+            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
+            body: JSON.stringify(requestData)
+        }
+    );
+    const data = await response.json();
+    console.log("Prepared response:", data);
+    return data;
+}
+```
+
+And we get just the response part - compare it, it is the same as the one we used to interact with the contract.
+```json
+{
+  "status": "VALID",
+  "response": {
+    "attestationType": "0x5061796d656e7400000000000000000000000000000000000000000000000000",
+    "lowestUsedTimestamp": "1707293909",
+    "requestBody": {
+        "inUtxo": "8",
+        "transactionId": "0x01c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d1",
+        "utxo": "4"
+    },
+    "responseBody": {
+        "blockNumber": "2577266",
+        "blockTimestamp": "1707293909",
+        "intendedReceivedAmount": "11091745",
+        "intendedReceivingAddressHash": "0xd4045c296d33c3a727a40d8284b9b3d8fb65c1d8acc21da68143d6d1e4c19b39",
+        "intendedSpentAmount": "25800382",
+        "oneToOne": false,
+        "receivedAmount": "11091745",
+        "receivingAddressHash": "0xd4045c296d33c3a727a40d8284b9b3d8fb65c1d8acc21da68143d6d1e4c19b39",
+        "sourceAddressHash": "0x477031ede55f3ca387013295a98360bafde1839c4a2f0726e6afdba725055aa7",
+        "spentAmount": "25800382",
+        "standardPaymentReference": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "status": "0"
+    }
+  }
+}
+```
+
+TODO: Show how to get just the response without proof or anything - easier to debug and work with.
