@@ -99,7 +99,7 @@ function toHex(data) {
 }
 
 const BTC_TRANSACTION_ID =
-    "0x" + "304a57b73b755b5413dc366c861e29c8acdbb85c3bb2e840457035f0d27cb0e1";
+    "0x" + "01c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d1";
 
 async function prepareRequest() {
     const attestationType = toHex("Payment");
