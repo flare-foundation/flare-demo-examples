@@ -33,9 +33,26 @@ interface AttestationResponse {
     status: string;
 }
 
-async function prepareAttestationRequest(attestationType: string, network: string, requestData: any): Promise<AttestationResponse> {
+async function prepareAttestationRequest(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<AttestationResponse> {
     const response = await fetch(
         `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareRequest`,
+        {
+            method: "POST",
+            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
+            body: JSON.stringify({
+                "attestationType": toHex(attestationType),
+                "sourceId": toHex(sourceId),
+                "requestBody": requestBody
+            })
+        }
+    );
+    const data = await response.json();
+    return data;
+}
+
+async function prepareAttestationResponse(attestationType: string, network: string, requestData: any): Promise<any> {
+    const response = await fetch(
+        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`,
         {
             method: "POST",
             headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },

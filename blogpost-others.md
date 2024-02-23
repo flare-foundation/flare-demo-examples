@@ -47,25 +47,46 @@ But this is enough to get the idea on how response looks and see that you get al
 The first step is to prepare the request for the attestation.
 They are prepared in very similar manner, so we first prepare a simple function that will be able to prepare the request for any attestation type.
 
-```typescript
-interface AttestationResponse {
-    abiEncodedRequest: string;
-    status: string;
-}
+To make matters simpler, we will just check what the response would be directly and not go through the whole proof process.
 
-async function prepareAttestationRequest(attestationType: string, network: string, requestData: any): Promise<AttestationResponse> {
+```typescript
+async function prepareAttestationRequest(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<AttestationRequest> {
     const response = await fetch(
         `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareRequest`,
         {
             method: "POST",
             headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
-            body: JSON.stringify(requestData)
+            body: JSON.stringify({
+                "attestationType": toHex(attestationType),
+                "sourceId": toHex(sourceId),
+                "requestBody": requestBody
+            })
         }
     );
     const data = await response.json();
     return data;
 }
+
+
+async function prepareAttestationResponse(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<any> {
+    const response = await fetch(
+        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`,
+        {
+            method: "POST",
+            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
+            body: JSON.stringify({
+                "attestationType": toHex(attestationType),
+                "sourceId": toHex(sourceId),
+                "requestBody": requestBody
+            })
+        }
+    );
+    const data = await response.json();
+    return data;
+}
+
 ```
+
 
 Here, we assume, that our verifier supports all attestation types and networks - that is not required from all the verifiers, but it is a good practice to have a single endpoint for all the requests and route them to the correct verifier based on the request.
 
@@ -75,7 +96,8 @@ If we wanted to change the network type we look at, we would have to change the 
 
 Similarly, verifier contracts (the ones, that check the response together with Merkle proof is included in the state connector round) are very similar, the only difference is the type the verification function receives (and thus the type they verify), but then the type is encoded, hashed and the rest of the check is the same.
 
-TODO: Any generic stuff and code
+TODO: Any generic stuff and code 
+A mogoče tukaj dam kako stvari poganjat - če ne drgje bi mogl bit že v prvem blogu.
 
 Now, let's take a look at each of the attestation types and see how to prepare the request for them, what we need to provide and what we get in return.
 
@@ -262,15 +284,160 @@ Importantly, the verification contract just checks that this proof indeed proves
 The response itself should be checked by the dapp to make sure, it is the one you expect.
 In some cases, the verifiers will not even confirm response (as there is no such confirmation), but in this case, they might confirm the response, but also indicate that the balance has not decreased (and has indeed increased).
 
+#### Example
 
-<!-- TODO:Example, if possible with XRPL clawback -->
+Showing a balance decreasing transaction is simple - we will reuse the script from creating a transaction and just prove that the transaction has indeed decreased the balance of the address.
+
+The code is practically the same as before, we just make the request to a different endpoint (due to the different attestation type), change the `attestationType` field in the request body and specify the transaction and the address we want to prove the balance decrease for.
+As said before, specifying address is important, since address' balance might have decreased in the transaction, but its participation was only minimal (or was not even part of the initial signers).
+For the utxo chains, we also need to specify this, as many addresses might be involved in the transaction (by signing an array of outputs) and we need to specify which one we want to prove the balance decrease for and request the verifiers to do the whole accounting.
+
+
+```typescript
+const xrpl = require("xrpl")
+
+const { XRPL_PRIVATE_KEY, ATTESTATION_URL, ATTESTATION_API_KEY, USE_TESTNET_ATTESTATIONS } = process.env;
+const receiverAddress = "r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj"
+
+function toHex(data: string): string {
+    var result = "";
+    for (var i = 0; i < data.length; i++) {
+        result += data.charCodeAt(i).toString(16);
+    }
+    return "0x" + result.padEnd(64, "0");
+}
+
+function fromHex(data: string): string {
+    data = data.replace(/^(0x\.)/, '');
+    return data
+        .split(/(\w\w)/g)
+        .filter(p => !!p)
+        .map(c => String.fromCharCode(parseInt(c, 16)))
+        .join('');
+}
+
+async function prepareAttestationResponse(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<AttestationResponse> {
+    const response = await fetch(
+        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`,
+        {
+            method: "POST",
+            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
+            body: JSON.stringify({
+                "attestationType": toHex(attestationType),
+                "sourceId": toHex(sourceId),
+                "requestBody": requestBody
+            })
+        }
+    );
+    const data = await response.json();
+    return data;
+}
+
+async function getXRPLclient(): Promise<any> {
+    const client = new xrpl.Client("wss://s.altnet.rippletest.net:51233")
+    await client.connect()
+
+    return client
+}
+
+async function sendXRPLTransaction(message: string = "", amount: number = 10, target: string = "r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj"): Promise<string> {
+    const client = await getXRPLclient()
+
+    const test_wallet = xrpl.Wallet.fromSeed(XRPL_PRIVATE_KEY)
+
+    let memos = []
+    if (message) {
+        // Standard payment reference must be 32 bytes - so we right pad with 0
+        const MemoData = xrpl.convertStringToHex(message).padEnd(64, "0")
+        const MemoType = xrpl.convertStringToHex("Text");
+        const MemoFormat = xrpl.convertStringToHex("text/plain");
+
+        memos.push({
+            "Memo": {
+                "MemoType": MemoType,
+                "MemoData": MemoData,
+                "MemoFormat": MemoFormat
+            }
+        })
+    }
+
+    const transaction = await client.autofill({
+        "TransactionType": "Payment",
+        "Account": test_wallet.address,
+        "Amount": amount.toString(),
+        "Destination": target,
+        "Memos": memos,
+    })
+
+    const signed = test_wallet.sign(transaction)
+    console.log(`See transaction at https://testnet.xrpl.org/transactions/${signed.hash}`)
+    await client.submitAndWait(signed.tx_blob)
+
+    await client.disconnect()
+
+    // sleep for 10 seconds to allow the transaction to be processed
+    await new Promise(resolve => setTimeout(resolve, 10 * 1000))
+
+    const result = await prepareAttestationResponse("BalanceDecreasingTransaction", "xrp", "testXRP",
+        {
+            "transactionId": "0x" + signed.hash,
+            "sourceAddressIndicator": web3.utils.soliditySha3(test_wallet.address),
+        }
+    )
+
+    console.log(
+        result
+    );
+
+    console.log(fromHex(result.response.responseBody.standardPaymentReference));
+}
+
+async function main() {
+    await sendXRPLTransaction("Hello world!")
+}
+
+main().then(() => process.exit(0))
+```
+
+We create a transaction, wait for it to be processed and then prepare response that checks, that it was really a balance decreasing transaction.
+
+An example response would look like this:
+```json
+{
+    "status": "VALID",
+    "response": {
+        "attestationType": "0x42616c616e636544656372656173696e675472616e73616374696f6e00000000",
+        "sourceId": "0x7465737458525000000000000000000000000000000000000000000000000000",
+        "votingRound": "0",
+        "lowestUsedTimestamp": "1708671652",
+        "requestBody": {
+            "transactionId": "0xB40C7540D8393D389AAF6006C0429608ADD871C0CA3174B72EA55776D885B77B",
+            "sourceAddressIndicator": "0xa1ca3089c3e9f4c6e9ccf2bfb65bcf3e9d7544a092c79d642d5d34a54e0267e1"
+        }, "responseBody": {
+            "blockNumber": "45629840",
+            "blockTimestamp": "1708671652",
+            "sourceAddressHash": "0xa1ca3089c3e9f4c6e9ccf2bfb65bcf3e9d7544a092c79d642d5d34a54e0267e1",
+            "spentAmount": "22",
+            "standardPaymentReference": "0x48656C6C6F20776F726C64210000000000000000000000000000000000000000"
+        }
+    }
+}
+Hello world!
+```
+
+
+All the fields are populated correctly and most importantly, although, the transaction sent 10 XRP drops, the response nicely shows, that the balance decreased by 22, as 12 was spent on transaction fee.
+
+<!-- TODO:BTC Example, and if possible one with XRPL clawback -->
 
 ### Confirmed Block Height Exists
+
+TODO: Link do full specifikacije.
 
 We now know how to observe generic transactions and balance decreasing transactions.
 It would be great, if there was a way to somehow get information about the block production rate on the external chain.
 This has multiple use cases - for example, you can check what is the current top block on the chain and then check if this might be near the timestamp that the transaction on external chain should happen.
-It is also a good way to observe if other chain is progressing and not halted.
+It is also a good way to observe if the other chain is progressing and not halted.
 
 Let's see the type specification:
 
@@ -388,16 +555,22 @@ The response body contains the following fields:
 - `lowestQueryWindowBlockNumber` - the block number of the latest block that has a timestamp strictly smaller than `blockTimestamp` - `queryWindow`. This allows us to gauge the average block production time in the specified block range.
 - `lowestQueryWindowBlockTimestamp` - the timestamp of the block at height `lowestQueryWindowBlockNumber`. So the time when the block was produced.
 
+#### Example
+
 This attestation type is also useful to see another important thing - the `INDETERMINATE` response.
 What does that mean?
 It means that the attestation can't be confirmed (yet), as there is not enough confirmations for the block.
 In this case, the response is `INDETERMINATE` - so not confirmed, but it does indicate, that it might be valid in the future (it at least indicates that the attestation client can't reject it for sure).
 
-Go, take the following code and try to see how `prepareResponse` fares for bocks, that are out of range for current confirmation limit.
+Go, take the following code and try to see how `prepareResponse` fares for blocks, that are out of range for current confirmation limit.
+
+
 
 <!-- TODO:Example -->
 
 ### Reference Payment Nonexistence
+
+TODO: Link do full specifikacije
 
 You are getting more and more familiar with the attestation types and you are starting to see, that they are very powerful and can be used in many different ways.
 Let's check a bit more involved one - the `ReferencePaymentNonexistence` type.
@@ -553,7 +726,23 @@ If the request is confirmed, it means that there was no payment in such range (i
 
 The full rules for verification are quite complex (and chain dependent) and are available in the [specification](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/active-types/ReferencedPaymentNonexistence.md#verification), but the important thing is, that the request is confirmed if no transaction meeting the specified criteria is found in the search range.
 
-<!--TODO: code example -->
+#### Example
+
+To produce a nice and correct example that allows us to test everything properly, we will need to be careful.
+Since we are proving a negative, any mistake we make during request preparation will result in transaction that was not made (a simple misencoding of memo field would almost certainly produce a non-existing transaction) and gave us a false sense of security.
+
+To be a bit more certain, we will structure our request more carefully:
+1. Create a transaction with reference payment and some nonzero value.
+2. First try to confirm `Payment` attestation request and make sure that we get back the correct reference and value - this means that the transaction is seen.
+We will then use information when this transaction has happened, to construct a range that will be used in the next step - and we are sure, that it contains our transaction.
+3. We will then make three requests for non-existing payment:
+    - One with correct (or lower) value and correct reference - This one will return `INDETERMINATE`<!-- TODO: A RES? -->, as the verifier can't prove the non existence of such transaction
+    - One with the correct value, but slightly wrong payment reference (change just one index) - This one should be confirmed, as no such transaction exists (the payment reference does not match)
+    - One with to large value, but correct payment reference. This one should be confirmed, as the transaction with payment reference exists, but does not transfer enough value.   
+
+##### XRP Ledger
+The example code that showcases this on testnet XRP Ledger is available in `tryXRPLPaymentNonExistence.ts`.
+
 
 Keep in mind, that the requested range can be quite large, so the verifiers might not be able to confirm the response (as they might not have the view of all blocks from `minimalBlockNumber` to `firstOverflowBlockNumber`), so the request might be rejected.
 
@@ -662,7 +851,21 @@ This is useful if you want to use the address in your protocol - you can use the
 - `standardAddressHash` - if `isValid`, this is the standard address hash of the validated address, otherwise a zero bytes32 string.
 This is useful to verify with the standard address hash returned by `Payment` and `ReferencedPaymentNonexistence`.
 
-<!--TODO: code-->
-
 Think of this more of as an example of what can be offloaded to off-chain computation (and verification) - and try to imagine what other things that are prohibitively expensive (or impossible due to data unavailability) on-chain can be offloaded to off-chain computation.
 
+#### Example
+
+The script for address verification (`AddressVerification.ts`) is a bit simpler then the scripts so far, as we don't have to create a transaction or anything, we just call `prepareResponse` endpoint and see the result.
+Remember, in real usage, we will have to first prepare a request for State Connector, wait for it to get confirmed and only then use the response in our smart contract together with proof.
+This effectively means, that our smart contract will get just the result of (possibly) huge and expensive calculation (the response body part) together with proof, that this was included in the merkle root - and thus has been calculated and attested to by the validator of the network.
+
+<!-- TODO: A lahko na to gledamo kot na ZK proof nekega izračuna? - a bi se dal iz tega čist lepo na ta AI dal vezat stvari - mogoče very simple classification a je nek address fishing al pa blacklisted kje? -->
+
+
+### Conclusion
+
+Wow, congratulations - you made it this far.
+Now you see, what the State Connector can do and also know, how to use it and what are some details you need to be careful about.
+As usual, check the repository for full code and try to play around.
+
+In the next blogpost, we will see, how information from EVM chains can be relayed and what we can do with it.

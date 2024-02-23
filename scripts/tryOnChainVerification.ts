@@ -23,7 +23,6 @@ async function deployPaymentAggregationExample(): PaymentAggregationExampleInsta
 
 async function main() {
 
-    return
     const paymentAggregationExample = await deployPaymentAggregationExample();
     const payment = await checkMerkleProof(791508);
 

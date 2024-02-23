@@ -721,15 +721,6 @@ With the ability to bridge data effectively, the State Connector is shaping the 
 
 Remember, the whole code can be found on this [repo](https://github.com/flare-foundation/flare-demo-examples), where you can find some additional examples and a few helpful scripts to run everything on your own.
 
-## Important links
-
-To make your life easier in the future, all the important links and resources are listed below:
-
--   Flare [hardhat](https://github.com/flare-foundation/flare-hardhat-starter) and [foundry](https://github.com/flare-foundation/flare-foundry-starter) starter packs. They already include the latest versions of periphery packages.
--   State connector specification [repo](https://git.aflabs.org/flare-external/state-connector-protocol-public/-/tree/main).
--   Demo repository containing all the code from this blog [repo](https://github.com/flare-foundation/flare-demo-examples).
--   Current deployment of the State Connector on Coston testnet [0x0c13aDA1C7143Cf0a0795FFaB93eEBb6FAD6e4e3](https://coston-explorer.flare.network/address/0x0c13aDA1C7143Cf0a0795FFaB93eEBb6FAD6e4e3).
-
 ## Additional useful methods
 
 We have shown how you can request the attestation and then use the response, but sometimes you might want to get just the response without the proof (there is no proof or round to speak about) or anything related to the State Connector confirmation procedure.
@@ -797,4 +788,34 @@ And we get just the response part - compare it, it is the same as the one we use
 }
 ```
 
-TODO: Show how to get just the response without proof or anything - easier to debug and work with.
+## Automate this process
+
+### XRP Ledger
+
+Let's automate this process and create a script, that creates a transaction on external chain and immediately try to see what request we would get from the state connector.
+
+In the file `tryXRPLTransactionVerification.ts` we have a simple script, that creates an XRPL transaction to some predefined address - you can change this if you want to.
+To make it work, just populate the `.env` file with `XRPL_PRIVATE_KEY` that has some testnet XRP (https://test.bithomp.com/faucet/) on it and run the script.
+
+In the file `tryXRPLTransactionVerification.ts` we create a transaction on the XRPL testnet and then immediately try to see what request we would get from the state connector.
+The code is pretty simple, the only important part is properly encoding the standard payment reference and pad it to 32 bytes.
+If standard payment reference conforms to the specification, it will also be returned in the response from the State Connector.
+
+
+### Bitcoin (and Dogecoin)
+
+The process is similar, we create a simple transaction with `OP_RETURN` that carries the payment reference.
+Due to the security assumptions, we can't use the same script to immediately check the response, as Bitcoin verification requires 6 confirmations and Dogecoin 60 confirmations - which usually takes just a bit under an hour.
+
+The script therefore only creates the transaction and prints the transaction hash or uses a provided transaction hash to check the response from the State Connector.
+
+<!--TODO:finish this code-->
+
+## Important links
+
+To make your life easier in the future, all the important links and resources are listed below:
+
+-   Flare [hardhat](https://github.com/flare-foundation/flare-hardhat-starter) and [foundry](https://github.com/flare-foundation/flare-foundry-starter) starter packs. They already include the latest versions of periphery packages.
+-   State connector specification [repo](https://git.aflabs.org/flare-external/state-connector-protocol-public/-/tree/main).
+-   Demo repository containing all the code from this blog [repo](https://github.com/flare-foundation/flare-demo-examples).
+-   Current deployment of the State Connector on Coston testnet [0x0c13aDA1C7143Cf0a0795FFaB93eEBb6FAD6e4e3](https://coston-explorer.flare.network/address/0x0c13aDA1C7143Cf0a0795FFaB93eEBb6FAD6e4e3).
