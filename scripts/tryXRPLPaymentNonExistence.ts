@@ -81,9 +81,8 @@ async function sendXRPLTransaction(message: string = "", amount: number = 10, ta
 
     // sleep for 10 seconds to allow the transaction to be processed
     await new Promise(resolve => setTimeout(resolve, 10 * 1000))
-
+    console.log("Payment:")
     // 1. prove the payment:
-    // TODO
     const resultPayment = await prepareAttestationResponse("Payment", "xrp", "testXRP",
         {
             "transactionId": "0x" + signed.hash,
@@ -95,22 +94,25 @@ async function sendXRPLTransaction(message: string = "", amount: number = 10, ta
     if (resultPayment.status != "VALID") {
         console.log("Something wrong when confirming payment");
     }
-    if (resultPayment.responseBody.standardPaymentReference != MemoData) {
+    console.log(resultPayment)
+    if (resultPayment.response.responseBody.standardPaymentReference != ("0x" + MemoData)) {
         console.log("Something wrong with message reference");
+        console.log(resultPayment.response.responseBody.standardPaymentReference);
+        console.log(MemoData);
     }
-    if (resultPayment.responseBody.receivingAddressHash != web3.utils.soliditySha3(target)) {
+    if (resultPayment.response.responseBody.receivingAddressHash != web3.utils.soliditySha3(target)) {
         console.log("Something wrong with target address hash");
     }
 
     // Get information about transaction: block and block timestamp -> we will need this to create the range, where the transaction has happened
-
-    const blockNumber = Number(resultPayment.responseBody.blockNumber)
-    const blockTimestamp = Number(resultPayment.responseBody.blockTimestamp)
+    console.log("Failing non existence proof:")
+    const blockNumber = Number(resultPayment.response.responseBody.blockNumber)
+    const blockTimestamp = Number(resultPayment.response.responseBody.blockTimestamp)
 
     const targetRange = {
-        minimalBlockNumber: blockNumber - 5, // Search few block before
-        deadlineBlockNumber: blockNumber + 1, // Search a few blocks after, but not too much, as they need to already be indexed by attestation clients
-        deadlineTimestamp: blockTimestamp + 3, // Search a bit after
+        minimalBlockNumber: (blockNumber - 5).toString(), // Search few block before
+        deadlineBlockNumber: (blockNumber + 1).toString(), // Search a few blocks after, but not too much, as they need to already be indexed by attestation clients
+        deadlineTimestamp: (blockTimestamp + 3).toString(), // Search a bit after
         destinationAddressHash: web3.utils.soliditySha3(target) // The target address for transaction
     }
 
@@ -120,46 +122,50 @@ async function sendXRPLTransaction(message: string = "", amount: number = 10, ta
     const resultFailedNonExistence = await prepareAttestationResponse("ReferencedPaymentNonexistence", "xrp", "testXRP",
         {
             ...targetRange,
-            amount,
-            standardPaymentReference: MemoData
+            amount: amount.toString(),
+            standardPaymentReference: "0x" + MemoData
         }
     )
-    // TODO: Check for correct things
+
     console.log(resultFailedNonExistence);
 
+    if (resultFailedNonExistence.status != "INVALID") {
+        console.log("Something wrong with failed non existence");
+    }
+
+    console.log("Successful non existence proofs:")
 
     // Change the memo field a bit and successfully prove non existence
     let wrongMemoData = xrpl.convertStringToHex(message).padEnd(64, "1") // We pad 1 instead of 0
     const resultWrongMemoNonExistence = await prepareAttestationResponse("ReferencedPaymentNonexistence", "xrp", "testXRP",
         {
             ...targetRange,
-            amount,
-            standardPaymentReference: wrongMemoData
+            amount: amount.toString(),
+            standardPaymentReference: "0x" + wrongMemoData
         }
     )
+
+    console.log(resultWrongMemoNonExistence)
 
     if (resultWrongMemoNonExistence.status != "VALID") {
         console.log("Something wrong with wrong memo non existence");
     }
-
-    console.log(resultWrongMemoNonExistence)
-
 
     // Change the value and successfully prove non existence.
 
     const resultWrongAmountNonExistence = await prepareAttestationResponse("ReferencedPaymentNonexistence", "xrp", "testXRP",
         {
             ...targetRange,
-            amount: amount + 1, // Increase the amount, so the transaction we made is now invalid
-            standardPaymentReference: wrongMemoData
+            amount: (amount + 1).toString(), // Increase the amount, so the transaction we made is now invalid
+            standardPaymentReference: "0x" + MemoData
         }
     )
 
-    if (resultWrongAmountNonExistence.status != "VALID") {
-        console.log("Something wrong with wrong memo non existence");
-    }
-
     console.log(resultWrongAmountNonExistence)
+
+    if (resultWrongAmountNonExistence.status != "VALID") {
+        console.log("Something wrong with wrong amount non existence");
+    }
 }
 
 async function main() {

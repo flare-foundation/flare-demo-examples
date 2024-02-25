@@ -13,7 +13,7 @@ We will take a look at the following attestation types (all currently active typ
 - [ReferencePaymentNonexistence](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/active-types/ReferencedPaymentNonexistence.md): Prove that the payment with the specified reference does not exist on the specified chain.
 This is useful if you need to prove that someone didn't pay you - did not honor the payment you have requested.
 
-The specification also includes EVMTransaction, but this one is more complicated and powerful, and we will cover it in a separate [blog post](TODO:soon).
+The specification also includes `EVMTransaction`, but this one is more complicated and powerful, and we will cover it in a separate [blog post](TODO:soon).
 
 Each of the types is designed to prove a specific thing about - sometimes about transactions, sometimes about blocks, sometimes just to offload an expensive computation off the chain and have the result available on chain.
 The team has carefully studied the most important use cases and designed the attestation types to be safe, well-defined (to make sure, they are confirmed and understood in a non-ambiguous way), and efficient.
@@ -28,7 +28,7 @@ As usual, the whole block with full code is available in the [GitHub repository]
 
 In the previous blog, we have seen, how the whole process works:
 1. Observe, that something you want has happened
-2. Prepare request for the attestation (using your attestation client api)
+2. Prepare request for the attestation (using your attestation client API)
 3. Submit the request to the State Connector
 4. Wait for the State Connector to confirm the request
 5. Once the request is confirmed, prepare the response and use it
@@ -40,6 +40,35 @@ The process is the same for all the attestation types, so we will not be repeati
 
 Remember, your best friend in that case is the `prepareResponse` endpoint, which returns the full response - without the proof.
 But this is enough to get the idea on how response looks and see that you get all the correct information.
+
+## Attestation client API
+
+Before jumping into different attestation types, we should take some time to explore the generated swagger for our API (you can get details on how swagger works [here](https://swagger.io/tools/swagger-ui/)).
+
+Open page `${ATTESTATION_HOST}/verifier/btc/api-doc#/` (swap `btc` for the network you are interested in) and you will see the full documentation of the API.
+Here, you can see all available endpoints, what types they accept and what they return.
+Before trying them out, don't forget to authorize yourself with the API key (you can do this in the top right corner of the page).
+
+Let's first try to prepare a request for the `Payment` type (which we already explored in the previous blog post) and see what we get in return.
+Pick some btc transaction from the block explorer and prepare the request for it.
+If you are doing this on a test network, the `sourceId` in the example request is wrong (it should be `testBTC`), but if you try to execute a request with wrong `sourceId`, the attestation client will reject it, and you will get a nice error message on what you should fix.
+
+<!--TODO: add example image-->
+
+Apart from the available attestation types, you can also see the diagnostic endpoints, that allow you to get information about the chain the attestation client is observing.
+
+The endpoints are:
+- `state` - returns the current state of the attestation client (what blocks are indexed, tip height, etc.)
+- `block-range` - returns the range of blocks the attestation client is currently observing
+- `transaction` - Returns full information about transaction with the specified ID (do **not** prefix it with `0x`). Try it with a random transaction ID and marvel at all the information you get in return.
+- `block` - Returns full information about block with the specified hash. Try it with the current tip height and see what you get in return.
+- `confirmedBlockAt` - Same as block by hash, but you specify the block number.
+- `blockHeight` - Returns the current tip height of the chain (due to the required amount of confirmations, the tip height might be different that the block range).
+This is the height of latest block that has been observed, but is not confirmed by the required number of confirmations.
+- `transactionBlock` - Returns the block information in which the transaction with the specified ID is included.
+- `transactions` - Returns the list of transactions currently indexed (this is controlled by the block range of the indexer).
+
+The method here are not necessary to use the State connector, but they are very useful for debugging and getting information about the chain and will prove very useful when you are building your dapp.
 
 
 ## Attestation types
@@ -287,10 +316,11 @@ In some cases, the verifiers will not even confirm response (as there is no such
 #### Example
 
 Showing a balance decreasing transaction is simple - we will reuse the script from creating a transaction and just prove that the transaction has indeed decreased the balance of the address.
+The whole code that produces the following example is present in `tryXRPLBalanceDecreasingTransaction.ts`.
 
 The code is practically the same as before, we just make the request to a different endpoint (due to the different attestation type), change the `attestationType` field in the request body and specify the transaction and the address we want to prove the balance decrease for.
 As said before, specifying address is important, since address' balance might have decreased in the transaction, but its participation was only minimal (or was not even part of the initial signers).
-For the utxo chains, we also need to specify this, as many addresses might be involved in the transaction (by signing an array of outputs) and we need to specify which one we want to prove the balance decrease for and request the verifiers to do the whole accounting.
+For the utxo chains, we also need to specify `sourceAddressIndicator`, as many addresses might be involved in the transaction (by signing an array of outputs) and we need to specify which one we want to prove the balance decrease for and request the verifiers to do the whole accounting.
 
 
 ```typescript
@@ -432,7 +462,7 @@ All the fields are populated correctly and most importantly, although, the trans
 
 ### Confirmed Block Height Exists
 
-TODO: Link do full specifikacije.
+Full specification is available [here](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/active-types/ConfirmedBlockHeightExists.md).
 
 We now know how to observe generic transactions and balance decreasing transactions.
 It would be great, if there was a way to somehow get information about the block production rate on the external chain.
@@ -557,22 +587,178 @@ The response body contains the following fields:
 
 #### Example
 
+What is the easiest way to see, how this works?
+Well, to check the top block, one would have to query the RPC of the chain, get the top block, subtract the number of confirmations and then query the attestation client to get the result.
+We could also piggypack on the previous example, create a transaction and see the block it was included in and proceed from there on.
+
+But we can cheat a bit and get information from the attestation providers.
+Each attestation provider also exposes a number of diagnostic endpoints, that allow us to get information about the chain it is operating on.
+The one that is interesting for us is the `block-range` endpoint, that returns the range of blocks the attestation provider is currently observing.
+And that is exactly what we will do - we will get the range of blocks the attestation provider is observing and then request the confirmation of the top block in the range.
+TODO: To bi bilo fino za te endpointe povedat že kje drugje - mogoče na vrhu.
+
+Go, take the following code (also in `tryConfirmedBlockHeightExists.ts`) and try to see how `prepareResponse` fares for blocks, that are out of range for current confirmation limit.
+
+```typescript
+
+const { ATTESTATION_URL, ATTESTATION_API_KEY } = process.env;
+
+function toHex(data: string): string {
+    var result = "";
+    for (var i = 0; i < data.length; i++) {
+        result += data.charCodeAt(i).toString(16);
+    }
+    return "0x" + result.padEnd(64, "0");
+}
+
+function fromHex(data: string): string {
+    data = data.replace(/^(0x\.)/, '');
+    return data
+        .split(/(\w\w)/g)
+        .filter(p => !!p)
+        .map(c => String.fromCharCode(parseInt(c, 16)))
+        .join('');
+}
+
+async function prepareAttestationResponse(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<AttestationResponse> {
+
+    const response = await fetch(
+        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`,
+        {
+            method: "POST",
+            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
+            body: JSON.stringify({
+                "attestationType": toHex(attestationType),
+                "sourceId": toHex(sourceId),
+                "requestBody": requestBody
+            })
+        }
+    );
+    const data = await response.json();
+    return data;
+}
+
+async function getVerifierBlockRange(network: string): Promise<any> {
+    return (await (await fetch(
+        `${ATTESTATION_URL}/verifier/${network}/api/indexer/block-range`,
+        {
+            method: "GET",
+            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" }
+        }
+    )).json()).data
+}
+
+async function main() {
+    const btcRange = await getVerifierBlockRange("btc")
+    const dogeRange = await getVerifierBlockRange("doge")
+    const xrplRange = await getVerifierBlockRange("xrp")
+
+    console.log("BTC Range: ", btcRange)
+    console.log(
+        await prepareAttestationResponse("ConfirmedBlockHeightExists", "btc", "testBTC",
+            {
+                blockNumber: btcRange.last.toString(),
+                queryWindow: "123"
+            })
+    )
+
+    console.log("DOGE Range: ", dogeRange)
+    console.log(
+        await prepareAttestationResponse("ConfirmedBlockHeightExists", "doge", "testDOGE",
+            {
+                blockNumber: dogeRange.last.toString(),
+                queryWindow: "123"
+            })
+    )
+
+    console.log("XRPL Range: ", xrplRange)
+    console.log(
+        await prepareAttestationResponse("ConfirmedBlockHeightExists", "xrp", "testXRP",
+            {
+                blockNumber: xrplRange.last.toString(),
+                queryWindow: "123"
+            })
+    )
+}
+
+main().then(() => process.exit(0))
+```
+
+And we get the example response
+```json
+BTC Range:  { first: 2578997, last: 2579392 }
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x436f6e6669726d6564426c6f636b486569676874457869737473000000000000',
+    sourceId: '0x7465737442544300000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '1708812188',
+    requestBody: { blockNumber: '2579392', queryWindow: '123' },
+    responseBody: {
+      blockTimestamp: '1708812188',
+      numberOfConfirmations: '6',
+      lowestQueryWindowBlockNumber: '2579391',
+      lowestQueryWindowBlockTimestamp: '1708812020'
+    }
+  }
+}
+DOGE Range:  { first: 5706001, last: 5974548 }
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x436f6e6669726d6564426c6f636b486569676874457869737473000000000000',
+    sourceId: '0x74657374444f4745000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '1708819752',
+    requestBody: { blockNumber: '5974548', queryWindow: '123' },
+    responseBody: {
+      blockTimestamp: '1708819752',
+      numberOfConfirmations: '60',
+      lowestQueryWindowBlockNumber: '5974543',
+      lowestQueryWindowBlockTimestamp: '1708819511'
+    }
+  }
+}
+XRPL Range:  { first: 45585486, last: 45678173 }
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x436f6e6669726d6564426c6f636b486569676874457869737473000000000000',
+    sourceId: '0x7465737458525000000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '1708822152',
+    requestBody: { blockNumber: '45678173', queryWindow: '123' },
+    responseBody: {
+      blockTimestamp: '1708822152',
+      numberOfConfirmations: '1',
+      lowestQueryWindowBlockNumber: '45678132',
+      lowestQueryWindowBlockTimestamp: '1708822022'
+    }
+  }
+}
+```
+
 This attestation type is also useful to see another important thing - the `INDETERMINATE` response.
 What does that mean?
 It means that the attestation can't be confirmed (yet), as there is not enough confirmations for the block.
-In this case, the response is `INDETERMINATE` - so not confirmed, but it does indicate, that it might be valid in the future (it at least indicates that the attestation client can't reject it for sure).
+In this case, the response is `INDETERMINATE` - so not confirmed, but it does indicate, that it might be valid in the future (it at least indicates that the attestation client can neither reject nor confirm it for sure).
 
-Go, take the following code and try to see how `prepareResponse` fares for blocks, that are out of range for current confirmation limit.
+Go, take the code and try to check for the block that is not yet confirmed by the correct amount and see the response you get.
+The easiest way is to just add 10 to the block range and see what happens.
+If you did it correctly, the response should be
+```json
+{ 
+    "status": "INDETERMINATE"
+}
+```
 
-
-
-<!-- TODO:Example -->
 
 ### Reference Payment Nonexistence
 
-TODO: Link do full specifikacije
+Full specification is available [here](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/active-types/ReferencedPaymentNonexistence.md).
 
-You are getting more and more familiar with the attestation types and you are starting to see, that they are very powerful and can be used in many different ways.
+You are getting more and more familiar with the attestation types, and you are starting to see, that they are very powerful and can be used in many different ways.
 Let's check a bit more involved one - the `ReferencePaymentNonexistence` type.
 
 This one is a bit more difficult to implement and properly use, as we are forcing the attestation client to do a lot of work - they need to prove that a certain payment has not been made.
@@ -736,7 +922,7 @@ To be a bit more certain, we will structure our request more carefully:
 2. First try to confirm `Payment` attestation request and make sure that we get back the correct reference and value - this means that the transaction is seen.
 We will then use information when this transaction has happened, to construct a range that will be used in the next step - and we are sure, that it contains our transaction.
 3. We will then make three requests for non-existing payment:
-    - One with correct (or lower) value and correct reference - This one will return `INDETERMINATE`<!-- TODO: A RES? -->, as the verifier can't prove the non existence of such transaction
+    - One with correct (or lower) value and correct reference - This one will return `INVALID`, as the verifier can't prove the non existence of such transaction
     - One with the correct value, but slightly wrong payment reference (change just one index) - This one should be confirmed, as no such transaction exists (the payment reference does not match)
     - One with to large value, but correct payment reference. This one should be confirmed, as the transaction with payment reference exists, but does not transfer enough value.   
 
@@ -746,8 +932,92 @@ The example code that showcases this on testnet XRP Ledger is available in `tryX
 
 Keep in mind, that the requested range can be quite large, so the verifiers might not be able to confirm the response (as they might not have the view of all blocks from `minimalBlockNumber` to `firstOverflowBlockNumber`), so the request might be rejected.
 
+```json
+See transaction at https://testnet.xrpl.org/transactions/C2B493B8AE2E3C105D004D8AFBB4AFB5CA758608504CCE895C9331291DA19D75
+Payment:
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x5061796d656e7400000000000000000000000000000000000000000000000000',
+    sourceId: '0x7465737458525000000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '1708830051',
+    requestBody: {
+      transactionId: '0xC2B493B8AE2E3C105D004D8AFBB4AFB5CA758608504CCE895C9331291DA19D75',
+      inUtxo: '0',
+      utxo: '0'
+    },
+    responseBody: {
+      blockNumber: '45680731',
+      blockTimestamp: '1708830051',
+      sourceAddressHash: '0xa1ca3089c3e9f4c6e9ccf2bfb65bcf3e9d7544a092c79d642d5d34a54e0267e1',
+      receivingAddressHash: '0x0555194538763da400394fc7184432e9a006565fa710392ea1a86486eb83920f',
+      intendedReceivingAddressHash: '0x0555194538763da400394fc7184432e9a006565fa710392ea1a86486eb83920f',
+      standardPaymentReference: '0x48656C6C6F20776F726C64210000000000000000000000000000000000000000',
+      spentAmount: '22',
+      intendedSpentAmount: '22',
+      receivedAmount: '10',
+      intendedReceivedAmount: '10',
+      oneToOne: true,
+      status: '0'
+    }
+  }
+}
+Failing non existence proof:
+{ status: 'INVALID' }
+Successful non existence proofs:
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x5265666572656e6365645061796d656e744e6f6e6578697374656e6365000000',
+    sourceId: '0x7465737458525000000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '1708830033',
+    requestBody: {
+      minimalBlockNumber: '45680726',
+      deadlineBlockNumber: '45680732',
+      deadlineTimestamp: '1708830054',
+      destinationAddressHash: '0x0555194538763da400394fc7184432e9a006565fa710392ea1a86486eb83920f',
+      amount: '10',
+      standardPaymentReference: '0x48656C6C6F20776F726C64211111111111111111111111111111111111111111'
+    },
+    responseBody: {
+      minimalBlockTimestamp: '45680726',
+      firstOverflowBlockNumber: '45680733',
+      firstOverflowBlockTimestamp: '1708830060'
+    }
+  }
+}
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x5265666572656e6365645061796d656e744e6f6e6578697374656e6365000000',
+    sourceId: '0x7465737458525000000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '1708830033',
+    requestBody: {
+      minimalBlockNumber: '45680726',
+      deadlineBlockNumber: '45680732',
+      deadlineTimestamp: '1708830054',
+      destinationAddressHash: '0x0555194538763da400394fc7184432e9a006565fa710392ea1a86486eb83920f',
+      amount: '11',
+      standardPaymentReference: '0x48656C6C6F20776F726C64210000000000000000000000000000000000000000'
+    },
+    responseBody: {
+      minimalBlockTimestamp: '45680726',
+      firstOverflowBlockNumber: '45680733',
+      firstOverflowBlockTimestamp: '1708830060'
+    }
+  }
+}
+```
+
 
 ### AddressValidity
+
+The full specification is available [here](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/active-types/AddressValidity.md).
+And there is a sub-specification for each chain, that specifies the rules for the address validity for each chain.
+Be careful, Bitcoin and Dogecoin have different rules for validity on the mainnet and testnet, so make sure to check the correct specification with the correct verifier.
 
 This is a very simple attestation type, that is able to prove that the string constitutes a valid address on the specified chain.
 Importantly, different from the `Payment` type we saw in the previous blog, this type does not require a transaction to be proven, it just offloads the computation of the address validity to the verifier so that expensive computation does not have to be done on-chain.
@@ -855,9 +1125,244 @@ Think of this more of as an example of what can be offloaded to off-chain comput
 
 #### Example
 
-The script for address verification (`AddressVerification.ts`) is a bit simpler then the scripts so far, as we don't have to create a transaction or anything, we just call `prepareResponse` endpoint and see the result.
+The script for address validity (`tryAddressValidity.ts`) is a bit simpler then the scripts so far, as we don't have to create a transaction or anything, we just call `prepareResponse` endpoint and see the result.
 Remember, in real usage, we will have to first prepare a request for State Connector, wait for it to get confirmed and only then use the response in our smart contract together with proof.
 This effectively means, that our smart contract will get just the result of (possibly) huge and expensive calculation (the response body part) together with proof, that this was included in the merkle root - and thus has been calculated and attested to by the validator of the network.
+
+Full code:
+```typescript
+const { ATTESTATION_URL, ATTESTATION_API_KEY } = process.env;
+const exampleXRPLAddress = "r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj"
+const someDogecoinAddress = "njyMWWyh1L7tSX6QkWRgetMVCVyVtfoDta"
+const someBTCAddress = "tb1qq3fm2kdklehk545c5rgfxzfhe7ph5tt640cayu"
+
+function toHex(data: string): string {
+    var result = "";
+    for (var i = 0; i < data.length; i++) {
+        result += data.charCodeAt(i).toString(16);
+    }
+    return "0x" + result.padEnd(64, "0");
+}
+
+function fromHex(data: string): string {
+    data = data.replace(/^(0x\.)/, '');
+    return data
+        .split(/(\w\w)/g)
+        .filter(p => !!p)
+        .map(c => String.fromCharCode(parseInt(c, 16)))
+        .join('');
+}
+
+async function prepareAttestationResponse(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<AttestationResponse> {
+    const response = await fetch(
+        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`,
+        {
+            method: "POST",
+            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
+            body: JSON.stringify({
+                "attestationType": toHex(attestationType),
+                "sourceId": toHex(sourceId),
+                "requestBody": requestBody
+            })
+        }
+    );
+    const data = await response.json();
+    return data;
+}
+
+async function main() {
+
+    console.log(
+        await prepareAttestationResponse("AddressValidity", "xrp", "testXRP",
+            { addressStr: exampleXRPLAddress })
+    )
+    console.log(
+        await prepareAttestationResponse("AddressValidity", "xrp", "testXRP",
+            { addressStr: "0xhahahahaha" })
+    )
+    console.log(
+        await prepareAttestationResponse("AddressValidity", "xrp", "testXRP",
+            { addressStr: "Hello world!" })
+    )
+
+    console.log(
+        await prepareAttestationResponse("AddressValidity", "btc", "testBTC",
+            { addressStr: someBTCAddress })
+    )
+    console.log(
+        await prepareAttestationResponse("AddressValidity", "btc", "testBTC",
+            { addressStr: "0xhahahahaha" })
+    )
+    console.log(
+        await prepareAttestationResponse("AddressValidity", "btc", "testBTC",
+            { addressStr: "Hello world!" })
+    )
+
+    console.log(
+        await prepareAttestationResponse("AddressValidity", "doge", "testDOGE",
+            { addressStr: someDogecoinAddress })
+    )
+    console.log(
+        await prepareAttestationResponse("AddressValidity", "doge", "testDOGE",
+            { addressStr: "0xhahahahaha" })
+    )
+    console.log(
+        await prepareAttestationResponse("AddressValidity", "doge", "testDOGE",
+            { addressStr: "Hello world!" })
+    )
+
+
+
+
+}
+
+main().then(() => process.exit(0))
+```
+and the response
+```json
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x4164647265737356616c69646974790000000000000000000000000000000000',
+    sourceId: '0x7465737458525000000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '0xffffffffffffffff',
+    requestBody: { addressStr: 'r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj' },
+    responseBody: {
+      isValid: true,
+      standardAddress: 'r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj',
+      standardAddressHash: '0x0555194538763da400394fc7184432e9a006565fa710392ea1a86486eb83920f'
+    }
+  }
+}
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x4164647265737356616c69646974790000000000000000000000000000000000',
+    sourceId: '0x7465737458525000000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '0xffffffffffffffff',
+    requestBody: { addressStr: '0xhahahahaha' },
+    responseBody: {
+      isValid: false,
+      standardAddress: '',
+      standardAddressHash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+    }
+  }
+}
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x4164647265737356616c69646974790000000000000000000000000000000000',
+    sourceId: '0x7465737458525000000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '0xffffffffffffffff',
+    requestBody: { addressStr: 'Hello world!' },
+    responseBody: {
+      isValid: false,
+      standardAddress: '',
+      standardAddressHash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+    }
+  }
+}
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x4164647265737356616c69646974790000000000000000000000000000000000',
+    sourceId: '0x7465737442544300000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '0xffffffffffffffff',
+    requestBody: { addressStr: 'tb1qq3fm2kdklehk545c5rgfxzfhe7ph5tt640cayu' },
+    responseBody: {
+      isValid: true,
+      standardAddress: 'tb1qq3fm2kdklehk545c5rgfxzfhe7ph5tt640cayu',
+      standardAddressHash: '0x085f152e9e9ebd6c009827678785b1b3667733fa3f6b5d78bb462bd1978825ff'
+    }
+  }
+}
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x4164647265737356616c69646974790000000000000000000000000000000000',
+    sourceId: '0x7465737442544300000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '0xffffffffffffffff',
+    requestBody: { addressStr: '0xhahahahaha' },
+    responseBody: {
+      isValid: false,
+      standardAddress: '',
+      standardAddressHash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+    }
+  }
+}
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x4164647265737356616c69646974790000000000000000000000000000000000',
+    sourceId: '0x7465737442544300000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '0xffffffffffffffff',
+    requestBody: { addressStr: 'Hello world!' },
+    responseBody: {
+      isValid: false,
+      standardAddress: '',
+      standardAddressHash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+    }
+  }
+}
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x4164647265737356616c69646974790000000000000000000000000000000000',
+    sourceId: '0x74657374444f4745000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '0xffffffffffffffff',
+    requestBody: { addressStr: 'njyMWWyh1L7tSX6QkWRgetMVCVyVtfoDta' },
+    responseBody: {
+      isValid: true,
+      standardAddress: 'njyMWWyh1L7tSX6QkWRgetMVCVyVtfoDta',
+      standardAddressHash: '0xfc8d6252c5132f771fc711fe13cb3c6e768ed9290ce199efd87d5ec1b6094df6'
+    }
+  }
+}
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x4164647265737356616c69646974790000000000000000000000000000000000',
+    sourceId: '0x74657374444f4745000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '0xffffffffffffffff',
+    requestBody: { addressStr: '0xhahahahaha' },
+    responseBody: {
+      isValid: false,
+      standardAddress: '',
+      standardAddressHash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+    }
+  }
+}
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x4164647265737356616c69646974790000000000000000000000000000000000',
+    sourceId: '0x74657374444f4745000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '0xffffffffffffffff',
+    requestBody: { addressStr: 'Hello world!' },
+    responseBody: {
+      isValid: false,
+      standardAddress: '',
+      standardAddressHash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+    }
+  }
+}
+```
+
+One might ask what use is such an attestation type and why all the checks?
+Think of it in two ways:
+- The data contains request and response - this makes it possible to observe the input (request) and output (response) of the computation.
+This computation can be very complex and expensive, but for our purposes, we only need to know the result (and of course, the input we want to be observed) and we can act on it.
+- The Merkle proof is then used to prove that the response was included in the committed root and thus was confirmed by the verifiers.
+The "being confirmed" part is important, as it means that the verifiers have indeed seen the request, ran the computation (and arrived at the same result) and included the result we base our actions on in the Merkle root.
 
 <!-- TODO: A lahko na to gledamo kot na ZK proof nekega izračuna? - a bi se dal iz tega čist lepo na ta AI dal vezat stvari - mogoče very simple classification a je nek address fishing al pa blacklisted kje? -->
 
@@ -869,3 +1374,6 @@ Now you see, what the State Connector can do and also know, how to use it and wh
 As usual, check the repository for full code and try to play around.
 
 In the next blogpost, we will see, how information from EVM chains can be relayed and what we can do with it.
+
+A word of warning, while it might be tempting to save the whole proof structure in your smart contract (if you want to do some later operations), this is terribly inefficient from gas standpoint as you are writing a lot of data to memory and decoding nested structures is expensive.
+But not only this, as the structures are nested, even operating on them when in memory (or copying them from `calldata` to `memory`) generates large bytecode, which makes contract deployment more expensive or even impossible if you pass the limit.

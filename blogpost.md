@@ -801,6 +801,39 @@ In the file `tryXRPLTransactionVerification.ts` we create a transaction on the X
 The code is pretty simple, the only important part is properly encoding the standard payment reference and pad it to 32 bytes.
 If standard payment reference conforms to the specification, it will also be returned in the response from the State Connector.
 
+An example result would be 
+```
+See transaction at https://testnet.xrpl.org/transactions/1D3FC0F8A2E509F2C4EC2F2F446075A60674C7C7EFE04948632444088FF54B42
+{
+  status: 'VALID',
+  response: {
+    attestationType: '0x5061796d656e7400000000000000000000000000000000000000000000000000',
+    sourceId: '0x7465737458525000000000000000000000000000000000000000000000000000',
+    votingRound: '0',
+    lowestUsedTimestamp: '1708820060',
+    requestBody: {
+      transactionId: '0x1D3FC0F8A2E509F2C4EC2F2F446075A60674C7C7EFE04948632444088FF54B42',
+      inUtxo: '0',
+      utxo: '0'
+    },
+    responseBody: {
+      blockNumber: '45677518',
+      blockTimestamp: '1708820060',
+      sourceAddressHash: '0xa1ca3089c3e9f4c6e9ccf2bfb65bcf3e9d7544a092c79d642d5d34a54e0267e1',
+      receivingAddressHash: '0x0555194538763da400394fc7184432e9a006565fa710392ea1a86486eb83920f',
+      intendedReceivingAddressHash: '0x0555194538763da400394fc7184432e9a006565fa710392ea1a86486eb83920f',
+      standardPaymentReference: '0x48656C6C6F20776F726C64210000000000000000000000000000000000000000',
+      spentAmount: '22',
+      intendedSpentAmount: '22',
+      receivedAmount: '10',
+      intendedReceivedAmount: '10',
+      oneToOne: true,
+      status: '0'
+    }
+  }
+}
+Hello world!
+```
 
 ### Bitcoin (and Dogecoin)
 

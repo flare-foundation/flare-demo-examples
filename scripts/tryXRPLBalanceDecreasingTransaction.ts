@@ -102,22 +102,22 @@ async function main() {
 
 main().then(() => process.exit(0))
 
-const a = {
-    "status": "VALID",
-    "response": {
-        "attestationType": "0x42616c616e636544656372656173696e675472616e73616374696f6e00000000",
-        "sourceId": "0x7465737458525000000000000000000000000000000000000000000000000000",
-        "votingRound": "0",
-        "lowestUsedTimestamp": "1708671652",
-        "requestBody": {
-            "transactionId": "0xB40C7540D8393D389AAF6006C0429608ADD871C0CA3174B72EA55776D885B77B",
-            "sourceAddressIndicator": "0xa1ca3089c3e9f4c6e9ccf2bfb65bcf3e9d7544a092c79d642d5d34a54e0267e1"
-        }, "responseBody": {
-            "blockNumber": "45629840",
-            "blockTimestamp": "1708671652",
-            "sourceAddressHash": "0xa1ca3089c3e9f4c6e9ccf2bfb65bcf3e9d7544a092c79d642d5d34a54e0267e1",
-            "spentAmount": "22",
-            "standardPaymentReference": "0x48656C6C6F20776F726C64210000000000000000000000000000000000000000"
-        }
-    }
-}
+// const a = {
+//     "status": "VALID",
+//     "response": {
+//         "attestationType": "0x42616c616e636544656372656173696e675472616e73616374696f6e00000000",
+//         "sourceId": "0x7465737458525000000000000000000000000000000000000000000000000000",
+//         "votingRound": "0",
+//         "lowestUsedTimestamp": "1708671652",
+//         "requestBody": {
+//             "transactionId": "0xB40C7540D8393D389AAF6006C0429608ADD871C0CA3174B72EA55776D885B77B",
+//             "sourceAddressIndicator": "0xa1ca3089c3e9f4c6e9ccf2bfb65bcf3e9d7544a092c79d642d5d34a54e0267e1"
+//         }, "responseBody": {
+//             "blockNumber": "45629840",
+//             "blockTimestamp": "1708671652",
+//             "sourceAddressHash": "0xa1ca3089c3e9f4c6e9ccf2bfb65bcf3e9d7544a092c79d642d5d34a54e0267e1",
+//             "spentAmount": "22",
+//             "standardPaymentReference": "0x48656C6C6F20776F726C64210000000000000000000000000000000000000000"
+//         }
+//     }
+// }
