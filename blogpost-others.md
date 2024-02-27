@@ -766,6 +766,9 @@ If you did it correctly, the response should be
 }
 ```
 
+One important thing to notice is that we are sending all numbers as strings (either decimal or hex).
+The main reason for this is that JavaScript does not have a native 64-bit integer type and the numbers are represented as 64-bit floating point numbers and any big numbers are not represented correctly.
+Even if block numbers are not that big, we are not taking any chances, and we always encode json numbers as strings, to be absolutely sure that the numbers are represented correctly.
 
 ### Reference Payment Nonexistence
 
