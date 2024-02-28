@@ -640,25 +640,162 @@ You can easily see, how they are zero padded to accommodate the whole 32 bytes.
 
 Similarly, the event in the first transaction that just minted 1000000 token wei (hex encoded in the data field) has the same zeroth topic, same recipient (topic with index 2) and zero address as sender. 
 
-#### ERC20 payment
+<!-- This is good for future examples, but to much time consuming to do now -->
+<!-- #### ERC20 payment
 
 Let's upgrade the contract from before to tally ERC20 payments on external chains.
 We do this by listening to events, decode them and use the decoded information
 
 #### Custom event
 
-Here, we will create a simple contract on Sepolia and follow the events it emits - just to see another example on how events function.
+Here, we will create a simple contract on Sepolia and follow the events it emits - just to see another example on how events function. -->
 
 ### Toplevel transaction + data decoding (allowance of erc20)
 
 We now know haw to listen to events (and decode them), let's see, how we can also decode toplevel transaction data.
-Here, we will check if the toplevel transaction really did increase the ERC20 allowance.
+Here, we will check if the toplevel transaction really did increase the ERC20 allowance and see how to get toplevel calldata.
+
+The full code for this example is in the `scripts/evm/tryERC20Allowance.ts` and `contracts/MintableERC20.sol` files.
+
+We initiate a simple `allowance` increase on Sepolia and then decode the calldata and see if it is really what we expect.
+The example response is something like this:
+```json
+{
+  "status": "VALID",
+  "response": {
+    "attestationType": "0x45564d5472616e73616374696f6e000000000000000000000000000000000000",
+    "sourceId": "0x7465737445544800000000000000000000000000000000000000000000000000",
+    "votingRound": "0",
+    "lowestUsedTimestamp": "1709147568",
+    "requestBody": {
+      "transactionHash": "0x445ac68dd09198cb3b8202cb9ccba323d4d1c82157a076f97fd6682dfaa826d9",
+      "requiredConfirmations": "1",
+      "provideInput": true,
+      "listEvents": true,
+      "logIndices": []
+    },
+    "responseBody": {
+      "blockNumber": "5382600",
+      "timestamp": "1709147568",
+      "sourceAddress": "0x4C3dFaFc3207Eabb7dc8A6ab01Eb142C8655F373",
+      "isDeployment": false,
+      "receivingAddress": "0xc14FA393fa7248c73B74A303cf35D5e980E11e2C",
+      "value": "0",
+      "input": "0x095ea7b3000000000000000000000000ff02f742106b8a25c26e65c1f0d66bec3c90d42900000000000000000000000000000000000000000000000000000000000003e8",
+      "status": "1",
+      "events": [
+        {
+          "logIndex": "54",
+          "emitterAddress": "0xc14FA393fa7248c73B74A303cf35D5e980E11e2C",
+          "topics": [
+            "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+            "0x0000000000000000000000004c3dfafc3207eabb7dc8a6ab01eb142c8655f373",
+            "0x000000000000000000000000ff02f742106b8a25c26e65c1f0d66bec3c90d429"
+          ],
+          "data": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+          "removed": false
+        }
+      ]
+    }
+  }
+}
+Result(2) [ '0xFf02F742106B8a25C26e65C1f0d66BEC3C90d429', 1000n ]
+```
+
+By now, you should be able to see, that the emitted event was the `Approval` event, and the data is the new allowance (with the correct participant addresses in the topics).
+
+What we want to take a look is the `input` field.
+It contains the call data of the toplevel transaction.
+Since we know the signature of this method, we can easily decode it and get the result we expect.
+
 
 ### State observation through events
 
 We do not have direct access to state on the other chain, but we can circumvent this using events.
 If we deploy a contract on external chain, that emits events pertaining to the state it can read (at that block) from the chain, we can easily observe this state (frozen at that point in time) on Flare.
-Let's see, how we can easily observe current status of ERC20 holdings and which accounts are blacklisted from transferring USDT. 
+Let's see, how we can easily observe current status of ERC20 allowance.
+
+The full code for this example is in the `scripts/evm/tryStateChecking.ts` and `contracts/FallbackWithEventContract.sol` files.
+
+The contract is simple
+```solidity
+function getState(address target, bytes calldata cdata) external payable {
+      // Just forward the call to the contract we want to interact with
+      // Caution - this is very unsafe, as the calldata can be anything
+      // If this contract were to had some tokens for example, the calldata could be used to transfer them.
+      (bool result, bytes memory returnData) = target.call{value: msg.value}(cdata);
+      emit CallResult(target, result, msg.data, returnData);
+      // A bit safer way would be to only allow specific functions to be called or use something like this: https://github.com/gnosis/util-contracts/blob/main/contracts/storage/StorageAccessible.sol
+  }
+```
+Any call to this contract will be forwarded to the target contract and the result will be emitted as an event.
+
+And the script is also relatively simple (though it does a lot of things).
+
+We get event in the same way as before, but now we also get the calldata and the target address.
+We need to do two things - first we decode the event to see what happened and then we decode the calldata to see what the state is.
+And then we decode both data bytes to see what we got.
+Importantly, it is necessary to know the structure of the event and the method we called to properly decode it.
+
+The response is something like this:
+```json
+Sepolia USDT deployed to: 0xf274cCf1f92F9B34FF5704802a9B690E1d3cbC38
+FallbackWithEventContract deployed to: 0xfCcB55F281df58869593B64B48f8c2Fe66f91C5D
+{
+  "status": "VALID",
+  "response": {
+    "attestationType": "0x45564d5472616e73616374696f6e000000000000000000000000000000000000",
+    "sourceId": "0x7465737445544800000000000000000000000000000000000000000000000000",
+    "votingRound": "0",
+    "lowestUsedTimestamp": "1709151372",
+    "requestBody": {
+      "transactionHash": "0xff86f77260f7623f24ea888dfd14c56380c5cece1a896bd2566d6b3596343e20",
+      "requiredConfirmations": "1",
+      "provideInput": true,
+      "listEvents": true,
+      "logIndices": []
+    },
+    "responseBody": {
+      "blockNumber": "5382901",
+      "timestamp": "1709151372",
+      "sourceAddress": "0x4C3dFaFc3207Eabb7dc8A6ab01Eb142C8655F373",
+      "isDeployment": false,
+      "receivingAddress": "0xfCcB55F281df58869593B64B48f8c2Fe66f91C5D",
+      "value": "0",
+      "input": "0xf29ca36c000000000000000000000000f274ccf1f92f9b34ff5704802a9b690e1d3cbc3800000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000044dd62ed3e0000000000000000000000004c3dfafc3207eabb7dc8a6ab01eb142c8655f373000000000000000000000000ff02f742106b8a25c26e65c1f0d66bec3c90d42900000000000000000000000000000000000000000000000000000000",
+      "status": "1",
+      "events": [
+        {
+          "logIndex": "4",
+          "emitterAddress": "0xfCcB55F281df58869593B64B48f8c2Fe66f91C5D",
+          "topics": [
+            "0xe1b725358090db1f537294b09c773c14622b44c1bc2832d105fb28cc48f5bd90"
+          ],
+          "data": "0x000000000000000000000000f274ccf1f92f9b34ff5704802a9b690e1d3cbc380000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000044dd62ed3e0000000000000000000000004c3dfafc3207eabb7dc8a6ab01eb142c8655f373000000000000000000000000ff02f742106b8a25c26e65c1f0d66bec3c90d4290000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000bc614e",
+          "removed": false
+        }
+      ]
+    }
+  }
+}
+Event data [
+  '0xf274cCf1f92F9B34FF5704802a9B690E1d3cbC38',
+  true,
+  '0xdd62ed3e0000000000000000000000004c3dfafc3207eabb7dc8a6ab01eb142c8655f373000000000000000000000000ff02f742106b8a25c26e65c1f0d66bec3c90d429',
+  '0x0000000000000000000000000000000000000000000000000000000000bc614e'
+]
+Method signature 0xdd62ed3e
+Decoded calldata Result(2) [
+  '0x4C3dFaFc3207Eabb7dc8A6ab01Eb142C8655F373',
+  '0xFf02F742106B8a25C26e65C1f0d66BEC3C90d429'
+]
+Decoded state data Result(1) [ 12345678n ]
+```
+
+We can see that the event was emitted, and all the calldata was properly decoded.
+Why is that important?
+Well it means, that we can now observe any state on the external blockchain without having to modify the contract on the external blockchain.
+This means, that we can easily observe USDT movements, current token balances...
 
 <!-- Meh: ### Contract creation -->
 
