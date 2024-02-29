@@ -298,7 +298,7 @@ The transaction hashes are logged, and JSON response of the attestation results 
 
 Here is the example results:
 
-```json
+```ts
 0xac640ab047aa1097ddd473e5940921eb500a9912b33072b8532617692428830e
 {
   "status": "VALID",
@@ -365,7 +365,7 @@ Here is the example results:
     }
   }
 }
-``` 
+```
 
 After we have the transaction hashes, we copy them to the part of `main` method that will execute the state connector part, this time on Coston.
 Let's take a look at `executeStateConnectorProof`.
@@ -389,10 +389,10 @@ In this case, we know how it looks like and the decoding is done by builtin `abi
 We then just push the decoded data in struct form to the list of events and we are done.
 A word of caution, the `abi.decode` is not type safe and you can easily get wrong results if you don't know the event structure, even more, this might be a security risk if you are not careful (or revert unexpectedly), but it is a nice representation of how powerful the events - and their information - can be.
 
-Finally, when we have both proofs and the contract deployed, we just call the `collectPayment` method with the proofs and we are done (unless something goes wrong, then we will have to wait for the next round and try again).
+Finally, when we have both proofs and the contract deployed, we just call the `collectPayment` method with the proofs, and we are done (unless something goes wrong, then we will have to wait for the next round and try again).
 
-The results is something like this:
-```json
+The result is something like this:
+```ts
 Rounds:  [ '809307', '809307' ]
 Waiting for the round to be confirmed 809303n 809307
 Waiting for the round to be confirmed 809303n 809307
@@ -798,35 +798,3 @@ Well it means, that we can now observe any state on the external blockchain with
 This means, that we can easily observe USDT movements, current token balances...
 
 <!-- Meh: ### Contract creation -->
-
-### Bridge contract with execution (more involved example) -- Ta gre lahko v posebi blogpost
-
-So now we know everything there is to know.
-Let's put our knowledge to test and create a proof of concept application that acts as a simple bridge controlled by state connector.
-
-The scenario is as follows:
-- We want to have a bridging contract from sepolia to Flare.
-- We will allow users to deposit funds on sepolia side of the bridge contract together with some calldata they want executed on Flare side.
-This deposit will emit event with the instructions.
-- Anyone can pick up this event, create state connector attestation request and supply the proof to Flare.
-- Once the proof is supplied on Flare (the other side), the receiving bridge contract will check that
-
-
-Homework: Create an optimistic version that goes in another direction:
-- Anyone can submit a request on Flare and event is emitted
-- Collateralized 3rd parties can execute the requested transaction on the other side - thus emitting the event about execution.
-- Anyone can relay the execution event back to Flare where two things happen:
-  - Executing party is seen as executing the correct request and gets rewarded a bit on Flare side (happy path). 
-  - Executing party is seen as executing invalid request (wrong value, address...) and is subsequently punished by having the collateral forfeited on Flare side.
-
-Note: This is just an idea of how this works, properly assessing the collateral ratios, making sure that security assumptions hold etc is left to the reader.
-
-
-Hackaton idea (built on previous idea)
-
-We have source contract on Flare and destination contract on Sepolia and one way secure bridge telling us what is happening on Sepolia.
-Flare side is therefore all knowing, while Sepolia lacks information from Flare side
-TODO : grda rekurzija pride... turtles all the way down
-
-
-
