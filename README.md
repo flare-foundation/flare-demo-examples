@@ -1,8 +1,13 @@
 # Generic state connector usage case
 
 This repository is a generic example of how to use the state connector to interact with the Flare Network.
-A simple BTC payment is proved, but general principles can be applied to any other connected chain.
-Read the full walkthrough in [blogpost](./blogpost.md).
+There are three main components:
+- [blogpost](./blogpost.md) - a detailed walkthrough of the example state connector usage for simple a Payment attestation type.
+This is a good starting point for understanding the state connector usage, as it goes through the process step by step and explains everything in detail.
+- [blogpost-others](./blogpost-others.md) - walkthrough through other attestation types (NonPayment, AddressValidity, BlockHeight, BalanceDecreasingTransaction)
+- [blogpost-evm](./blogpost-evm.md) - walkthrough through the usage of the state connector for Ethereum Virtual Machine (EVM) chains.
+EVM attestation type is a special case, as it is also able to catch events from the EVM chain, which gives it a lot of flexibility.
+If you are part of hackathon, start with the [blogpost](./blogpost.md) and then jump straight to the EVM type which give you the most power.
 
 ------
 # Flare Hardhat Starter Kit
