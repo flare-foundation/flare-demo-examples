@@ -797,4 +797,96 @@ Why is that important?
 Well it means, that we can now observe any state on the external blockchain without having to modify the contract on the external blockchain.
 This means, that we can easily observe USDT movements, current token balances...
 
+### State observation and decoding
+
+The last example showed how we can observe the state on another blockchain and use it in typescript.
+Now, we will also see, how to properly decode the event in smart contract.
+We will use the same contract on chain as before to emit events `CallResult` and then decode them in the contract.
+The result will then be passed to the contract on Coston that will firstly decode the full event, make sure, that we called the correct function and then decode the returned data (which is the state we want to observe).
+
+The full contract that does this in the `contracts/ERC20BalanceMonitor.sol` and the accompanying script is in the `scripts/evm/tryStateCheckingAndSave.ts` file.
+What we want to do is simple - query the ERC20 balance of specific address and save it in the contract storage.
+Here, you need to be careful, as this query is valid only at the time of the transaction, it might be different at the time of the block creation and confirmation.
+Plus keep in mind, that emitting an event means executing a transaction, and that means gas, so you should be careful with how often you do this.
+
+The process is the same as before, we invoke the contract, it emits the event ad we use the result to interact with the chain.
+But this time we cheat a bit.
+Instead of waiting for the whole state connector process to finish, we use `getResponse` to get just the response without the proof. 
+The `ERC20BalanceMonitor` then disregards the proof and just uses the response to process the data.
+
+Number of events can be quite large and processing all of them can be tedious (and error prone), so the easiest way is to find out which event is the one you want and add an index parameter to the function call.
+Let's see the code
+
+```soldity
+/*
+The function assumes that the event emitted in the eventIndex is the result of checking the balance of specific ERC20 token as emitted by FallbackWithEventContract (see previous blogpost).
+The main idea is to first emit the event checking the balance and then properly decode it
+*/
+function confirmBalanceEvent(EVMTransaction.Proof calldata transaction, address tokenAddress, address targetAddress, uint256 eventIndex) public
+{
+    // We explicitly ignore the proof here, but in production code, you should always verify the proof
+    // We ignore it so we can test the whole contract much faster on the same network using only the 
+    // In this blogpost we will just use the `prepareResponse` endpoint which has everything we need but the proof
+    require(
+        true || isEVMTransactionProofValid(transaction),
+        "Invalid proof"
+    );
+
+    EVMTransaction.Event memory _event = transaction.data.responseBody.events[eventIndex];
+    // This just check the happy path - do kkep in mind, that this can possibly faked
+    // And keep in mind that the specification does not require the topic0 to be event signature
+    require(
+        _event.topics[0] == keccak256("CallResult(address,bool,bytes,bytes)"),
+        "Invalid event"
+    );
+
+    // _event.emitterAddress should be the contract we "trust" to correctly call the ERC20 token
+
+    (address target, bool result, bytes memory callData, bytes memory returnData) = abi.decode(
+        _event.data,
+        (address, bool, bytes, bytes)
+    );
+
+    require(target == tokenAddress, "Invalid token address");
+
+
+    bytes memory expectedCalldata = abi.encodeWithSignature("balanceOf(address)", targetAddress);
+    require(
+        keccak256(callData) == keccak256(expectedCalldata),
+        "Invalid calldata"
+    );
+      // If a tuple was returned from the call, we can unpack it using abi.decode in the same way as in the event data decoding
+    uint256 balance = abi.decode(returnData, (uint256));
+
+    balances[transaction.data.responseBody.blockNumber] = BalanceInfo({
+        holder: targetAddress,
+        token: tokenAddress,
+        amount: balance,
+        blockNumber: transaction.data.responseBody.blockNumber,
+        timestamp: transaction.data.responseBody.timestamp,
+        rawEvent: _event,
+        proofHash: keccak256(abi.encode(transaction))
+    });
+}
+```
+
+We just ignore the proof - as said before, but then the fun part starts.
+We get the toplevel event out of the response - this is the one that contains calldata and return data, check that the topic matches and then decode the resulting data.
+Be careful, decoding the data might fail if we don't have the correct signature, so the example code if fine to show, but you might want to add more checks in production code.
+
+Once data of toplevel event is decoded, we simply check if the call data is what we expect and then decode the return data to get the balance - this is again dependent on what kind of return value we produced in the transaction.
+Again, the return data needs to be decoded - it might return something more complicated than just one uint256 - but it is easy to get the full result.
+Once we have all this - we just write it to the contract storage, and we are done.
+
+
+Let's take a look at the ts code and show a simple trick we have also hid in there.
+
+The code is practically the same as before - we create a transaction, query the state connector and use the data in the contract.
+But this time everything is done on the same (coston - `testSGB`) network.
+This makes it a bit easier to test, as we don't need to change the network, but it is a minor thing.
+It does sound strange (and pointless) to allow state connector to be used on the same network, but the main improvement comes from the toplevel relayer.
+
+Once state connector is included in the toplevel protocol (for hackaton a simple version of relay already exists), any state connector data is immediately relayed to externally connected chains via relay (as is the FTSO data) and that means, that external chains can also observe, wehat is happening on Flare.
+Think about this - up until now, we only relayed information from other chains to Flare, but now any example from the EVM part can immediatelly be replicated on Sepolia chain with Flare being the source chain (where things happen). 
+
 <!-- Meh: ### Contract creation -->
