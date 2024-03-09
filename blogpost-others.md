@@ -13,18 +13,56 @@ We will take a look at the following attestation types (all currently active typ
 - [ReferencePaymentNonexistence](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/active-types/ReferencedPaymentNonexistence.md): Prove that the payment with the specified reference does not exist on the specified chain.
 This is useful if you need to prove that someone didn't pay you - did not honor the payment you have requested.
 
-The specification also includes `EVMTransaction`, but this one is more complicated and powerful, and we will cover it in a separate [blog post](TODO:soon).
+The specification also includes `EVMTransaction`, but this one is more complicated and powerful, and we will cover it in a separate [blog post](./blogpost-evm.md).
 
 Each of the types is designed to prove a specific thing about - sometimes about transactions, sometimes about blocks, sometimes just to offload an expensive computation off the chain and have the result available on chain.
 The team has carefully studied the most important use cases and designed the attestation types to be safe, well-defined (to make sure, they are confirmed and understood in a non-ambiguous way), and efficient.
 
 Each of the types has an associated off-chain verifier, that is able to deconstruct the encoded request, execute the verification procedure and return the proper response.
-To find out more, how verifiers work, you can read the [verifier spec](TODO:LINK).
+<!-- To find out more, how verifiers work, you can read the [verifier spec](TODO:LINK). -->
 As with the payment type, each attestation type comes with a verification contract, that is able to verify, that the response and the Merkle proof are correct and that the response was indeed included in the Merkle tree for the round.
 The contracts are available in the [specification repository](https://github.com/flare-foundation/songbird-state-connector-protocol/tree/main/contracts/generated/verification), but as in the previous blog, we will be using the ones already deployed and made available by the periphery library.
+
+The library essentially exposed the unofficial addresses (one verifier per attestation type) like this:
+```solidity
+// Returns hardcoded unofficial deployment instances of Flare core contracts
+function auxiliaryGetIEVMTransactionVerification() internal view returns(IEVMTransactionVerification){
+    return IEVMTransactionVerification(0xf37AD1278917c04fb291C75a42e61710964Cb57c);
+}
+
+
+// Returns hardcoded unofficial deployment instances of Flare core contracts
+function auxiliaryGetIAddressValidityVerification() internal view returns(IAddressValidityVerification){
+    return IAddressValidityVerification(0xd94721da1dD5e222020D256fC073e8Be301ebdCB);
+}
+
+
+// Returns hardcoded unofficial deployment instances of Flare core contracts
+function auxiliaryGetIBalanceDecreasingTransactionVerification() internal view returns(IBalanceDecreasingTransactionVerification){
+    return IBalanceDecreasingTransactionVerification(0xeDa84A2eeDfdA53e7c33ef5fDe7B2798B910BF4A);
+}
+
+
+// Returns hardcoded unofficial deployment instances of Flare core contracts
+function auxiliaryGetIConfirmedBlockHeightExistsVerification() internal view returns(IConfirmedBlockHeightExistsVerification){
+    return IConfirmedBlockHeightExistsVerification(0x632A984d63f9Ae3C2Eb31e0dc2EeEaE1E282E0da);
+}
+
+
+// Returns hardcoded unofficial deployment instances of Flare core contracts
+function auxiliaryGetIPaymentVerification() internal view returns(IPaymentVerification){
+    return IPaymentVerification(0x1ECe6dd08D19c0faf3AB8cEcB146cd5ea5b9b7d9);
+}
+
+
+// Returns hardcoded unofficial deployment instances of Flare core contracts
+function auxiliaryGetIReferencedPaymentNonexistenceVerification() internal view returns(IReferencedPaymentNonexistenceVerification){
+    return IReferencedPaymentNonexistenceVerification(0xDfE5926fABA166187B29C33BC95DfDb18bbE52cd);
+}
+```
 Don't forget, verifying the proof is just the first part - this tells you, that a request was indeed included in the Merkle tree, but you still need to verify, that the response matches your dapp's requirements (payment is large enough, the address is correct, the transaction was successful, time range is sufficient).
 
-As usual, the whole block with full code is available in the [GitHub repository](TODO:LINK), and you are encouraged to follow if and try it out on your own.
+<!-- As usual, the whole block with full code is available in the [GitHub repository](TODO:LINK), and you are encouraged to follow if and try it out on your own. -->
 
 In the previous blog, we have seen, how the whole process works:
 1. Observe, that something you want has happened
@@ -140,8 +178,8 @@ If we wanted to change the network type we look at, we would have to change the 
 
 Similarly, verifier contracts (the ones, that check the response together with the Merkle proof is included in the state connector round) are very similar, the only difference is the type the verification function receives (and thus the type they verify), but then the type is encoded, hashed and the rest of the check is the same.
 
-TODO: Any generic stuff and code 
-A mogoče tukaj dam kako stvari poganjat - če ne drgje bi mogl bit že v prvem blogu.
+<!-- TODO: Any generic stuff and code 
+A mogoče tukaj dam kako stvari poganjat - če ne drgje bi mogl bit že v prvem blogu. -->
 
 Now, let's take a look at each of the attestation types and see how to prepare the request for them, what we need to provide and what we get in return.
 
@@ -1570,3 +1608,8 @@ In the next blogpost, we will see, how information from EVM chains can be relaye
 
 A word of warning, while it might be tempting to save the whole proof structure in your smart contract (if you want to do some later operations), this is terribly inefficient from gas standpoint as you are writing a lot of data to memory and decoding nested structures is expensive.
 But not only this, as the structures are nested, even operating on them when in memory (or copying them from `calldata` to `memory`) generates large bytecode, which makes contract deployment more expensive or even impossible if you pass the limit.
+
+
+### Other verifiers
+
+We used 
