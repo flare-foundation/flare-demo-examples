@@ -1,4 +1,12 @@
-# How to use the State Connector?
+---
+title: How to state connector
+slug: how-to-state-connector
+date: March. 15. 2024
+published: true
+thumbnailImage: /thumbnails/thumbnail-SC.png
+description: How to use the State Connector.
+tags: [intermediate, state-connector, flare]
+---
 
 The State Connector is a solution that bridges the gap between different blockchains, enabling the smooth exchange of information and synchronization of smart contracts and state changes.
 In this blog, we will explore the significance of bridging data across blockchains and how the State Connector allows dapps on the Flare network to easily integrate connected chains.
@@ -22,17 +30,17 @@ The State Connector smart contract then checks if there is enough consensus amon
 Flare's State Connector protocol operates in **attestation rounds**.
 Each attestation round has 4 consecutive phases:
 
--   **Collect**: Users send their requests to the State Connector contract which emits events.
-    Upon gathering the request, attestation providers assign them to a voting round according to the emission timestamp and try to assemble a response.
--   **Choose**: Attestation providers vote on which requests they will be able to provide valid responses in the current round.
--   **Commit**: Attestation providers send transactions with which they commit to the attested data for this round, but don't make the information public yet to prevent copying.
--   **Reveal**: Attestation providers reveal the attestation data.
--   **Count**: State Connector contract checks the revealed attestation data against committed data. If a majority agree on attestation data the result is published and stored on blockchain.
+- **Collect**: Users send their requests to the State Connector contract which emits events.
+  Upon gathering the request, attestation providers assign them to a voting round according to the emission timestamp and try to assemble a response.
+- **Choose**: Attestation providers vote on which requests they will be able to provide valid responses in the current round.
+- **Commit**: Attestation providers send transactions with which they commit to the attested data for this round, but don't make the information public yet to prevent copying.
+- **Reveal**: Attestation providers reveal the attestation data.
+- **Count**: State Connector contract checks the revealed attestation data against committed data. If a majority agree on attestation data the result is published and stored on blockchain.
 
 For each round, attestation providers assemble a Merkle tree where the leaves contain all the attestation responses of requests that were marked valid in choose phrase.
 The attestation providers use only Merkle root as attestation data in the reveal phase.
 This allows the consensus process to be lightweight and efficient. To act upon the attested request, the end user must provide the response and Merkle proof that proves the inclusion of the response in the Merkle tree.
-![CCCR phases diagram](CCCR.png)
+![CCCR phases diagram](/postsImages/CCCR.png)
 
 You can read more about the State Connector [here](https://docs.flare.network/tech/state-connector/).
 
@@ -54,18 +62,18 @@ For example, we have made a transaction on BTC and would like to use this inform
 Remember, Flare is EVM compatible blockchain, a proof of large transactions on an external chain that allows its use in an arbitrary computation - NFT issuance, immediate swap, and settlement with information from yet another chain...
 We will achieve this in the following steps:
 
--   **Verification of the transaction**: We submit our BTC transaction to the verifier (a service provided by attestation providers or some other entity) of our choice.
-    The verifier returns the JSON containing all the information about the transaction as well as a hex string representing an encoded attestation request to be submitted to the State Connector smart contract.
+- **Verification of the transaction**: We submit our BTC transaction to the verifier (a service provided by attestation providers or some other entity) of our choice.
+  The verifier returns the JSON containing all the information about the transaction as well as a hex string representing an encoded attestation request to be submitted to the State Connector smart contract.
 
--   **Attestation request**: The hex-encoded request gets submitted to the State Connector smart contract.
-    The smart contract then emits an event informing attestation providers about your request.
+- **Attestation request**: The hex-encoded request gets submitted to the State Connector smart contract.
+  The smart contract then emits an event informing attestation providers about your request.
 
--   **CCCR phases**: Waiting for all four stages of the overlapped Collect-Choose-Commit-Reveal (CCCR) protocol to finalize.
+- **CCCR phases**: Waiting for all four stages of the overlapped Collect-Choose-Commit-Reveal (CCCR) protocol to finalize.
 
--   **Merkle proof extraction**: Once the data is confirmed by the attestation clients and the State Connector contract reaches a consensus on the final Merkle root, the data about the transaction can be used on the Flare blockchain.
-    To use the data we need: the response and Merkle proof. Both can be queried from the attestation provider of choice.
+- **Merkle proof extraction**: Once the data is confirmed by the attestation clients and the State Connector contract reaches a consensus on the final Merkle root, the data about the transaction can be used on the Flare blockchain.
+  To use the data we need: the response and Merkle proof. Both can be queried from the attestation provider of choice.
 
--   **Submitting Merkle proof**: Once we have the response and Merkle proof we submit them to our smart contract, which verifies that the proof is correct using a dedicated verification contract that checks the response against the stored Merkle root using the Merkle proof. (available both on the chain and in the state connector repository).
+- **Submitting Merkle proof**: Once we have the response and Merkle proof we submit them to our smart contract, which verifies that the proof is correct using a dedicated verification contract that checks the response against the stored Merkle root using the Merkle proof. (available both on the chain and in the state connector repository).
 
 In the following section, we will look into each of those steps in detail, including how to implement them.
 
@@ -91,43 +99,39 @@ On default verifier implementations, we can get the encoded request by calling t
 ```typescript
 // Simple hex encoding
 function toHex(data) {
-    var result = "";
-    for (var i = 0; i < data.length; i++) {
-        result += data.charCodeAt(i).toString(16);
-    }
-    return result;
+  var result = '';
+  for (var i = 0; i < data.length; i++) {
+    result += data.charCodeAt(i).toString(16);
+  }
+  return result;
 }
 
-const BTC_TRANSACTION_ID =
-    "0x" + "01c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d1";
+const BTC_TRANSACTION_ID = '0x' + '01c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d1';
 
 async function prepareRequest() {
-    const attestationType = toHex("Payment");
-    const sourceType = toHex("testBTC");
-    // Attestation Request object to be sent to API endpoint
-    const requestData = {
-        attestationType: attestationType,
-        sourceId: sourceType,
-        requestBody: {
-            transactionId: BTC_TRANSACTION_ID,
-            inUtxo: "3",
-            utxo: "4",
-        },
-    };
-    const response = await fetch(
-        `${ATTESTATION_URL}/verifier/btc/Payment/prepareRequest`,
-        {
-            method: "POST",
-            headers: {
-                "X-API-KEY": API_KEY,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestData),
-        }
-    );
-    const data = await response.json();
-    console.log("Prepared request:", data);
-    return data;
+  const attestationType = toHex('Payment');
+  const sourceType = toHex('testBTC');
+  // Attestation Request object to be sent to API endpoint
+  const requestData = {
+    attestationType: attestationType,
+    sourceId: sourceType,
+    requestBody: {
+      transactionId: BTC_TRANSACTION_ID,
+      inUtxo: '3',
+      utxo: '4',
+    },
+  };
+  const response = await fetch(`${ATTESTATION_URL}/verifier/btc/Payment/prepareRequest`, {
+    method: 'POST',
+    headers: {
+      'X-API-KEY': API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestData),
+  });
+  const data = await response.json();
+  console.log('Prepared request:', data);
+  return data;
 }
 ```
 
@@ -142,8 +146,8 @@ If the selected verifier is able to find this transaction on their own node or d
 
 ```json
 {
-    "status": "VALID",
-    "abiEncodedRequest": "0x5061796d656e7400000000000000000000000000000000000000000000000000746573744254430000000000000000000000000000000000000000000000000010594158b4a189785feda815241c4e6f299053a65b22c3d748e9f0a6c34372e501c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d100000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000004"
+  "status": "VALID",
+  "abiEncodedRequest": "0x5061796d656e7400000000000000000000000000000000000000000000000000746573744254430000000000000000000000000000000000000000000000000010594158b4a189785feda815241c4e6f299053a65b22c3d748e9f0a6c34372e501c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d100000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000004"
 }
 ```
 
@@ -163,13 +167,13 @@ To decode the first two parts, just use any online tool or try it [here](https:/
 0000000000000000000000000000000000000000000000000000000000000004
 ```
 
--   The first line is just `toHex("Payment")`
--   The second line is `toHex("testBTC")`.
--   The third one is the **message integrity code** (`MIC`).
-    It is a hash of the whole response salted with a string `Flare`, which allows the attestation clients to check that they really see the correct thing and forces the requester to first compute the desired response.
-    The salt is there to force the attestation clients to really compute the whole request hash in the final Merkle root and not just copy it from the request.
-    Read more about it [here](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/hash-MIC.md).
--   The rest is just the request data: transaction hash, inUtxo and utxo.
+- The first line is just `toHex("Payment")`
+- The second line is `toHex("testBTC")`.
+- The third one is the **message integrity code** (`MIC`).
+  It is a hash of the whole response salted with a string `Flare`, which allows the attestation clients to check that they really see the correct thing and forces the requester to first compute the desired response.
+  The salt is there to force the attestation clients to really compute the whole request hash in the final Merkle root and not just copy it from the request.
+  Read more about it [here](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/hash-MIC.md).
+- The rest is just the request data: transaction hash, inUtxo and utxo.
 
 ## Attestation request
 
@@ -240,25 +244,22 @@ To extract the merkle proof we use `${ATTESTATION_URL}/attestation-client/api/pr
 
 ```typescript
 async function testAttestation(scRound, requestData) {
-    const attestationProof = {
-        roundId: scRound,
-        requestBytes: requestData.abiEncodedRequest,
-    };
-    const response = await fetch(
-        `${process.env.ATTESTER_BASE}/attestation-client/api/proof/get-specific-proof`,
-        {
-            method: "POST",
-            headers: {
-                "X-API-KEY": process.env.API_KEY,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(attestationProof),
-        }
-    );
+  const attestationProof = {
+    roundId: scRound,
+    requestBytes: requestData.abiEncodedRequest,
+  };
+  const response = await fetch(`${process.env.ATTESTER_BASE}/attestation-client/api/proof/get-specific-proof`, {
+    method: 'POST',
+    headers: {
+      'X-API-KEY': process.env.API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(attestationProof),
+  });
 
-    // Verified attestation proof from verifiers API endpoint.
-    const responseData = await response.json();
-    console.log("Response", responseData);
+  // Verified attestation proof from verifiers API endpoint.
+  const responseData = await response.json();
+  console.log('Response', responseData);
 }
 ```
 
@@ -268,52 +269,52 @@ The result of the call is the following JSON(you can read the [full spec](https:
 
 ```json
 {
-    "status": "OK",
-    "data": {
-        "roundId": 791508,
-        "hash": "0x893262e158c834e45015f45478e9dccda44f70d73854129666a9fe23e41a4a6a",
-        "requestBytes": "0x5061796d656e7400000000000000000000000000000000000000000000000000746573744254430000000000000000000000000000000000000000000000000010594158b4a189785feda815241c4e6f299053a65b22c3d748e9f0a6c34372e501c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d100000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000004",
-        "request": {
-            "attestationType": "0x5061796d656e7400000000000000000000000000000000000000000000000000",
-            "messageIntegrityCode": "0x10594158b4a189785feda815241c4e6f299053a65b22c3d748e9f0a6c34372e5",
-            "requestBody": {
-                "inUtxo": "8",
-                "transactionId": "0x01c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d1",
-                "utxo": "4"
-            },
-            "sourceId": "0x7465737442544300000000000000000000000000000000000000000000000000"
-        },
-        "response": {
-            "attestationType": "0x5061796d656e7400000000000000000000000000000000000000000000000000",
-            "lowestUsedTimestamp": "1707293909",
-            "requestBody": {
-                "inUtxo": "8",
-                "transactionId": "0x01c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d1",
-                "utxo": "4"
-            },
-            "responseBody": {
-                "blockNumber": "2577266",
-                "blockTimestamp": "1707293909",
-                "intendedReceivedAmount": "11091745",
-                "intendedReceivingAddressHash": "0xd4045c296d33c3a727a40d8284b9b3d8fb65c1d8acc21da68143d6d1e4c19b39",
-                "intendedSpentAmount": "25800382",
-                "oneToOne": false,
-                "receivedAmount": "11091745",
-                "receivingAddressHash": "0xd4045c296d33c3a727a40d8284b9b3d8fb65c1d8acc21da68143d6d1e4c19b39",
-                "sourceAddressHash": "0x477031ede55f3ca387013295a98360bafde1839c4a2f0726e6afdba725055aa7",
-                "spentAmount": "25800382",
-                "standardPaymentReference": "0x0000000000000000000000000000000000000000000000000000000000000000",
-                "status": "0"
-            },
-            "sourceId": "0x7465737442544300000000000000000000000000000000000000000000000000",
-            "votingRound": "791508"
-        },
-        "merkleProof": [
-            "0x4773a018b7dfcf7390a882406c53fc73eb08f9ebadb637820284dc615b7906cb",
-            "0x8ab24c478f9074e6b8f68ad08c6290819ec0e676ec0b6c42a9a3f0e43f510902",
-            "0x9f2fac2dbb646f5c9758551744c876a20421340f34dfe09c05877cc4e5540b49"
-        ]
-    }
+  "status": "OK",
+  "data": {
+    "roundId": 791508,
+    "hash": "0x893262e158c834e45015f45478e9dccda44f70d73854129666a9fe23e41a4a6a",
+    "requestBytes": "0x5061796d656e7400000000000000000000000000000000000000000000000000746573744254430000000000000000000000000000000000000000000000000010594158b4a189785feda815241c4e6f299053a65b22c3d748e9f0a6c34372e501c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d100000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000004",
+    "request": {
+      "attestationType": "0x5061796d656e7400000000000000000000000000000000000000000000000000",
+      "messageIntegrityCode": "0x10594158b4a189785feda815241c4e6f299053a65b22c3d748e9f0a6c34372e5",
+      "requestBody": {
+        "inUtxo": "8",
+        "transactionId": "0x01c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d1",
+        "utxo": "4"
+      },
+      "sourceId": "0x7465737442544300000000000000000000000000000000000000000000000000"
+    },
+    "response": {
+      "attestationType": "0x5061796d656e7400000000000000000000000000000000000000000000000000",
+      "lowestUsedTimestamp": "1707293909",
+      "requestBody": {
+        "inUtxo": "8",
+        "transactionId": "0x01c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d1",
+        "utxo": "4"
+      },
+      "responseBody": {
+        "blockNumber": "2577266",
+        "blockTimestamp": "1707293909",
+        "intendedReceivedAmount": "11091745",
+        "intendedReceivingAddressHash": "0xd4045c296d33c3a727a40d8284b9b3d8fb65c1d8acc21da68143d6d1e4c19b39",
+        "intendedSpentAmount": "25800382",
+        "oneToOne": false,
+        "receivedAmount": "11091745",
+        "receivingAddressHash": "0xd4045c296d33c3a727a40d8284b9b3d8fb65c1d8acc21da68143d6d1e4c19b39",
+        "sourceAddressHash": "0x477031ede55f3ca387013295a98360bafde1839c4a2f0726e6afdba725055aa7",
+        "spentAmount": "25800382",
+        "standardPaymentReference": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "status": "0"
+      },
+      "sourceId": "0x7465737442544300000000000000000000000000000000000000000000000000",
+      "votingRound": "791508"
+    },
+    "merkleProof": [
+      "0x4773a018b7dfcf7390a882406c53fc73eb08f9ebadb637820284dc615b7906cb",
+      "0x8ab24c478f9074e6b8f68ad08c6290819ec0e676ec0b6c42a9a3f0e43f510902",
+      "0x9f2fac2dbb646f5c9758551744c876a20421340f34dfe09c05877cc4e5540b49"
+    ]
+  }
 }
 ```
 
@@ -452,51 +453,51 @@ This is the meat of the entire attestation, that we will use on the Flare chain.
 Assuming that we wanted to make sure that someone paid us on the Bitcoin network and used the payment to mint an NFT on Flare, we would rigorously check that they paid enough, the payment was accepted, and that they paid to the correct address and so.
 This is exactly what the `ResponseBody` contains, let's dig in.
 
--   `blockNumber`: This is the block number of the block (on the underlying chain), in which the transaction was included.
-    Not really relevant for us, but might be important for some more specific applications (make sure that some transactions happen in the correct order).
--   `blockTimestamp`: This is the timestamp of the block (on the underlying chain) in which the transaction was included.
-    This is quite important if we want to make sure, that the transaction was fast enough (e.g., if we want to mint an NFT, we might want to make sure that the payment was made in the last X minutes).
--   `sourceAddressHash`: This is the hash of the address that made the payment.
-    Sometimes you want to make sure, that the payment was made from a specific address (e.g. if you want to mint an NFT only for the person that paid you).
-    This is the hash of the address, so you will need to hash the address you want to check and compare it to this field.
-    The reason we use hash instead of address directly is the fact that when multiple chains are supported, the address might be in different formats (e.g., for BTC it is in base58, for ETH in hex) and lengths.
-    An important thing to consider for utxo-based chains (BTC, DOGE) is that there is not a single address that made the payment, but rather a set of addresses that were used as inputs to the transaction.
-    State Connector proof gives us only the hash of the **selected payee** address.
-    How do we know which address was selected?
-    Using the `utxo` field in the request form.
-    When the transaction is processed on utxo chains, unspent outputs (and newly created inputs) are ordered and by specifying the `utxo` field we instruct the State Connector which one of the outputs was to consider when calculating as the payee in the response.
-    For non-utxo (currently XRPL) chains, this is the hash of the (only one) address that was specified in the transaction as the sender.
--   `receivingAddressHash`: This is the hash of the address that received the payment.
-    Similarly, as with the `sourceAddressHash` this is the hash of the address, so you will need to hash the address you want to check and compare it to this field.
-    As utxo-based chains (BTC, DOGE) can have multiple outputs, the `receivingAddressHash` is the hash of the **selected receiver** address - the one specified by the `inUtxo` field in the request.
-    For non-utxo (currently XRPL) chains, this is the hash of the (only one) address that was specified in the transaction as the receiver.
+- `blockNumber`: This is the block number of the block (on the underlying chain), in which the transaction was included.
+  Not really relevant for us, but might be important for some more specific applications (make sure that some transactions happen in the correct order).
+- `blockTimestamp`: This is the timestamp of the block (on the underlying chain) in which the transaction was included.
+  This is quite important if we want to make sure, that the transaction was fast enough (e.g., if we want to mint an NFT, we might want to make sure that the payment was made in the last X minutes).
+- `sourceAddressHash`: This is the hash of the address that made the payment.
+  Sometimes you want to make sure, that the payment was made from a specific address (e.g. if you want to mint an NFT only for the person that paid you).
+  This is the hash of the address, so you will need to hash the address you want to check and compare it to this field.
+  The reason we use hash instead of address directly is the fact that when multiple chains are supported, the address might be in different formats (e.g., for BTC it is in base58, for ETH in hex) and lengths.
+  An important thing to consider for utxo-based chains (BTC, DOGE) is that there is not a single address that made the payment, but rather a set of addresses that were used as inputs to the transaction.
+  State Connector proof gives us only the hash of the **selected payee** address.
+  How do we know which address was selected?
+  Using the `utxo` field in the request form.
+  When the transaction is processed on utxo chains, unspent outputs (and newly created inputs) are ordered and by specifying the `utxo` field we instruct the State Connector which one of the outputs was to consider when calculating as the payee in the response.
+  For non-utxo (currently XRPL) chains, this is the hash of the (only one) address that was specified in the transaction as the sender.
+- `receivingAddressHash`: This is the hash of the address that received the payment.
+  Similarly, as with the `sourceAddressHash` this is the hash of the address, so you will need to hash the address you want to check and compare it to this field.
+  As utxo-based chains (BTC, DOGE) can have multiple outputs, the `receivingAddressHash` is the hash of the **selected receiver** address - the one specified by the `inUtxo` field in the request.
+  For non-utxo (currently XRPL) chains, this is the hash of the (only one) address that was specified in the transaction as the receiver.
 
-    In our example, this is the `keccak256` of the address that can unlock the utxo at index 4 (bitcoin address `2NBzM49JAFQrFKD8FnxSaJ8kGLau1JGJ66o`) - as specified in the request.
+  In our example, this is the `keccak256` of the address that can unlock the utxo at index 4 (bitcoin address `2NBzM49JAFQrFKD8FnxSaJ8kGLau1JGJ66o`) - as specified in the request.
 
--   `intendedReceivingAddressHash`: This is the hash of the address that was intended to receive the payment.
-    This only makes sense if the transaction was unsuccessful (e.g., the payment was reverted by the receiver, or something went wrong).
-    This currently only makes sense on XRPL, as unsuccessful transactions are not included in Bitcoin or Dogecoin blocks.
--   `spentAmount`: This is the amount that was spent by the sender.
-    Importantly, as we designate the sender by the `inUtxo` field, this is the amount that was spent from all the inputs in this transaction (not just the one we selected) controlled by the address that unlocked the selected input minus the amount sent to outputs controlled by the address unlocking the inputs.
-    Think of it as the amount that was really spent from the sender's address - one might think of the State Connector as doing the full accounting.
--   `intendedSpentAmount`: This is the amount that was intended to be spent by the sender.
-    This only makes sense if the transaction was unsuccessful (e.g., the payment was reverted by the receiver, or something went wrong).
-    This currently only makes sense on XRPL, as unsuccessful transactions are not included in Bitcoin or Dogecoin blocks.
--   `receivedAmount`: This is the amount that was received by the receiver.
-    Importantly, as we designate the receiver by the `utxo` field, this is the amount that was received by the address that unlocked the selected output minus the amount sent to outputs controlled by the address unlocking the inputs.
-    Think of it as the amount that was really received by the receiver's address - one might think of the State Connector as doing the full accounting.
--   `intendedReceivedAmount`: This is the amount that was intended to be received by the receiver.
-    This only makes sense if the transaction was unsuccessful (e.g., the payment was reverted by the receiver, or something went wrong).
-    This currently only makes sense on XRPL, as unsuccessful transactions are not included in Bitcoin or Dogecoin blocks.
--   `standardPaymentReference`: This is the standard payment reference of the transaction.
-    This is a 32-byte string that you can use to encode additional information about the payment (e.g., invoice number, order number, etc.).
-    Be careful, the payment reference specification is a lot more involved and you should read the full specification [here](https://github.com/flare-foundation/songbird-state-connector-protocol/tree/main/specs/attestations/external-chains/standardPaymentReference.md).
-    But most of the time you will just want to check that the payment reference is the same as the one you expected (for example: the hash of the invoice ID you expect the payment for and the address that should be paying for it).
--   `oneToOne`: This is a boolean that indicates whether the transaction was one-to-one.
-    The transaction is one-to-one when all of the following holds - All inputs are controlled by the same address (source address) - Outputs may consist only of UTXOs wiring to `receivingAddress`,
--   `status`: This is the status of the transaction.
-    This is an integer that can be either 0, 1, or 2. - 0: The transaction was successful. - 1: The transaction was unsuccessful due to the sender's fault. - 2: The transaction was unsuccessful due to the receiver's fault (applicable only for XRPL).
-    The full specification on how transactions are considered successful or unsuccessful can be found [here](hhttps://github.com/flare-foundation/songbird-state-connector-protocol/tree/main/specs/attestations/external-chains/transactions.md#transaction-success-status).
+- `intendedReceivingAddressHash`: This is the hash of the address that was intended to receive the payment.
+  This only makes sense if the transaction was unsuccessful (e.g., the payment was reverted by the receiver, or something went wrong).
+  This currently only makes sense on XRPL, as unsuccessful transactions are not included in Bitcoin or Dogecoin blocks.
+- `spentAmount`: This is the amount that was spent by the sender.
+  Importantly, as we designate the sender by the `inUtxo` field, this is the amount that was spent from all the inputs in this transaction (not just the one we selected) controlled by the address that unlocked the selected input minus the amount sent to outputs controlled by the address unlocking the inputs.
+  Think of it as the amount that was really spent from the sender's address - one might think of the State Connector as doing the full accounting.
+- `intendedSpentAmount`: This is the amount that was intended to be spent by the sender.
+  This only makes sense if the transaction was unsuccessful (e.g., the payment was reverted by the receiver, or something went wrong).
+  This currently only makes sense on XRPL, as unsuccessful transactions are not included in Bitcoin or Dogecoin blocks.
+- `receivedAmount`: This is the amount that was received by the receiver.
+  Importantly, as we designate the receiver by the `utxo` field, this is the amount that was received by the address that unlocked the selected output minus the amount sent to outputs controlled by the address unlocking the inputs.
+  Think of it as the amount that was really received by the receiver's address - one might think of the State Connector as doing the full accounting.
+- `intendedReceivedAmount`: This is the amount that was intended to be received by the receiver.
+  This only makes sense if the transaction was unsuccessful (e.g., the payment was reverted by the receiver, or something went wrong).
+  This currently only makes sense on XRPL, as unsuccessful transactions are not included in Bitcoin or Dogecoin blocks.
+- `standardPaymentReference`: This is the standard payment reference of the transaction.
+  This is a 32-byte string that you can use to encode additional information about the payment (e.g., invoice number, order number, etc.).
+  Be careful, the payment reference specification is a lot more involved and you should read the full specification [here](https://github.com/flare-foundation/songbird-state-connector-protocol/tree/main/specs/attestations/external-chains/standardPaymentReference.md).
+  But most of the time you will just want to check that the payment reference is the same as the one you expected (for example: the hash of the invoice ID you expect the payment for and the address that should be paying for it).
+- `oneToOne`: This is a boolean that indicates whether the transaction was one-to-one.
+  The transaction is one-to-one when all of the following holds - All inputs are controlled by the same address (source address) - Outputs may consist only of UTXOs wiring to `receivingAddress`,
+- `status`: This is the status of the transaction.
+  This is an integer that can be either 0, 1, or 2. - 0: The transaction was successful. - 1: The transaction was unsuccessful due to the sender's fault. - 2: The transaction was unsuccessful due to the receiver's fault (applicable only for XRPL).
+  The full specification on how transactions are considered successful or unsuccessful can be found [here](hhttps://github.com/flare-foundation/songbird-state-connector-protocol/tree/main/specs/attestations/external-chains/transactions.md#transaction-success-status).
 
 Transaction hash is not included in the response body, as it is already included in the request body (we don't want to unnecessarily repeat the data), but as it is part of the request body, it is also part of the Merkle proof (as the Merkle proof is constructed from the whole structure).
 Keep in mind, that if you want to use this proof on chain (users want to purchase something), you might want to make sure, that you do not allow them to use the same proof twice (e.g., by checking that the transaction hash is not already used in your contract - unless the sender is different).
@@ -506,34 +507,35 @@ Keep in mind, that if you want to use this proof on chain (users want to purchas
 Let's examine the `Payment` interface in details.
 Each of the attestation types we will see in the future will have the same form, so it is important to understand it.
 There are at least 5 parts of the interface:
+
 - `Request` - the request structure, having the `attestationType`, `sourceId`, `messageIntegrityCode` and `requestBody`.
-The first three fields are the same for all attestation types, while the `requestBody` is specific to the attestation type.
-In our case, the request body contains exactly the things we requested in the first place - the transaction hash and the utxo indices.
-And if you look closely, the unpacking of the request we made to the state connector (the 6 lines) is exactly abi encoded version of the `requestBody` part of the `Request` structure.
-This is also exactly how it is generated in the attestation client and it also makes it easy for attestation providers to unpack it, by taking the first field, the rest of the date is decoded by simply parsing the correct type.
+  The first three fields are the same for all attestation types, while the `requestBody` is specific to the attestation type.
+  In our case, the request body contains exactly the things we requested in the first place - the transaction hash and the utxo indices.
+  And if you look closely, the unpacking of the request we made to the state connector (the 6 lines) is exactly abi encoded version of the `requestBody` part of the `Request` structure.
+  This is also exactly how it is generated in the attestation client and it also makes it easy for attestation providers to unpack it, by taking the first field, the rest of the date is decoded by simply parsing the correct type.
 - `Response` is the full response structure.
-Again, the first four fields are the same for all attestation types, while the `responseBody` is specific to the attestation type.
-The first two fields identify the attestation request and chain. `votingRound` allows us to check in which round the request was submitted (important to get the correct merkle root with which to check the proof). While the `lowestUsedTimestamp` is the lowest timestamp used to generate the response.
+  Again, the first four fields are the same for all attestation types, while the `responseBody` is specific to the attestation type.
+  The first two fields identify the attestation request and chain. `votingRound` allows us to check in which round the request was submitted (important to get the correct merkle root with which to check the proof). While the `lowestUsedTimestamp` is the lowest timestamp used to generate the response.
 - `Proof` is the full structure we pass around. It contains the `Response` (which in turn also contains the `Request` - apart from knowing the result it also make sense to know what information exactly was requested) and the `merkleProof`, a list of merkle hashes that prove that the response is included in the merkle tree designated by the `votingRound` in the `Response`.
 - `RequestBody` is the structure of the request body.
-This one is specific to the attestation type and contains the data that is used to construct the response.
-You can make it as complex as you want, but it is important to keep it as simple as possible, as nested structures are harder (and much more expensive) to work with.
+  This one is specific to the attestation type and contains the data that is used to construct the response.
+  You can make it as complex as you want, but it is important to keep it as simple as possible, as nested structures are harder (and much more expensive) to work with.
 - `ResponseBody` is the structure of the response body.
-This one is specific to the attestation type and contains the data you want to use on chain.
-You can make it as complicated as possible - add lists, nested structures, etc, but it is important to keep it as simple as possible, as nested structures are harder (and much more expensive) to work with.
+  This one is specific to the attestation type and contains the data you want to use on chain.
+  You can make it as complicated as possible - add lists, nested structures, etc, but it is important to keep it as simple as possible, as nested structures are harder (and much more expensive) to work with.
 
 ## Submitting Merkle proof
 
 The usual interaction a contract on the Flare chain will have will consist of two parts
 
--   Checking that the relayed information is sufficient to perform the action (e.g., checking that the payment was large enough to mint an NFT).
-    We already explained what information is available in the previous section.
--   Checking that this information really was relayed by the State Connector and that the Merkle proof is correct.
-    This is done by submitting the Merkle proof to the verification contract.
-    We will see the verification contract in action in the next section.
-    This is available after the reveal phase of the round in which the request was submitted has ended, and the round has been **finalized**.
-    This happens with the first request to the State Connector smart contract after the reveal phase has ended.
-    The easiest way to check if the round has been finalized is to check the `lastFinalizedRoundId` method on the State Connector smart contract.
+- Checking that the relayed information is sufficient to perform the action (e.g., checking that the payment was large enough to mint an NFT).
+  We already explained what information is available in the previous section.
+- Checking that this information really was relayed by the State Connector and that the Merkle proof is correct.
+  This is done by submitting the Merkle proof to the verification contract.
+  We will see the verification contract in action in the next section.
+  This is available after the reveal phase of the round in which the request was submitted has ended, and the round has been **finalized**.
+  This happens with the first request to the State Connector smart contract after the reveal phase has ended.
+  The easiest way to check if the round has been finalized is to check the `lastFinalizedRoundId` method on the State Connector smart contract.
 
 A Verifier contract is just a simple wrapper around openzeppelin's Merkle proof verification contract.
 The code verifier contracts can be found on [repository](https://github.com/flare-foundation/songbird-state-connector-protocol/tree/main/contracts/generated/verification), but we have deployed them on Coston testnet for you to use and are already added to the periphery library unofficial contract registry.
@@ -589,33 +591,30 @@ We will first check the proof off-chain (remember, verification is just a view m
 
 ```typescript
 export async function checkMerkleProof(scRound: number) {
-    // Check that the round is already finalized
-    const stateConnector = await ethers.getContractAt(
-        flareLib.nameToAbi("IStateConnector", "coston").data,
-        flareLib.nameToAddress("StateConnector", "coston")
-    );
+  // Check that the round is already finalized
+  const stateConnector = await ethers.getContractAt(flareLib.nameToAbi('IStateConnector', 'coston').data, flareLib.nameToAddress('StateConnector', 'coston'));
 
-    const lastFinalized = await stateConnector.lastFinalizedRoundId();
+  const lastFinalized = await stateConnector.lastFinalizedRoundId();
 
-    if (scRound > lastFinalized) {
-        console.log("scRound:", scRound, "is not finalized yet");
-        return;
-    }
+  if (scRound > lastFinalized) {
+    console.log('scRound:', scRound, 'is not finalized yet');
+    return;
+  }
 
-    const response = await requestMerkleProof(scRound);
+  const response = await requestMerkleProof(scRound);
 
-    const paymentVerifier = await ethers.getContractAt(
-        flareLib.nameToAbi("IPaymentVerification", "coston").data,
-        flareLib.nameToAddress("IPaymentVerification", "coston")
-    );
-    const payment = {
-        data: response.data.response,
-        merkleProof: response.data.merkleProof,
-    };
+  const paymentVerifier = await ethers.getContractAt(
+    flareLib.nameToAbi('IPaymentVerification', 'coston').data,
+    flareLib.nameToAddress('IPaymentVerification', 'coston')
+  );
+  const payment = {
+    data: response.data.response,
+    merkleProof: response.data.merkleProof,
+  };
 
-    const tx = await paymentVerifier.verifyPayment(payment);
-    console.log("Verification tx:", tx);
-    return payment;
+  const tx = await paymentVerifier.verifyPayment(payment);
+  console.log('Verification tx:', tx);
+  return payment;
 }
 ```
 
@@ -703,14 +702,14 @@ The code is pretty simple and short!
 
 Let's take a look at the most important functions:
 
--   `isPaymentValid`: this **view** function checks, that the provided payment is valid - included in the State Connector.
-    We use the Flare-provided PaymentVerification contract to do this together with the periphery library to directly get the verifier contract.
-    The body is pretty simple - we just call the `verifyPayment` method on the verifier contract and that's it.
-    Don't forget that this is a **view** function, so it doesn't cost us anything to check the proof on the chain.
--   `addPayment`: this function is the one that will be called by the users to add the payment to the contract.
-    Remember, using the State Connector on the chain is usually a two-step process.
-    We firstly check that the provided proof and data are valid using the verifier and secondly, we check, that the provided data is valid for our specific use case - in our case, that it is a payment in testBTC.
-    After we are sure that the payment is valid, we tally the total amount received and store the proof for future reference.
+- `isPaymentValid`: this **view** function checks, that the provided payment is valid - included in the State Connector.
+  We use the Flare-provided PaymentVerification contract to do this together with the periphery library to directly get the verifier contract.
+  The body is pretty simple - we just call the `verifyPayment` method on the verifier contract and that's it.
+  Don't forget that this is a **view** function, so it doesn't cost us anything to check the proof on the chain.
+- `addPayment`: this function is the one that will be called by the users to add the payment to the contract.
+  Remember, using the State Connector on the chain is usually a two-step process.
+  We firstly check that the provided proof and data are valid using the verifier and secondly, we check, that the provided data is valid for our specific use case - in our case, that it is a payment in testBTC.
+  After we are sure that the payment is valid, we tally the total amount received and store the proof for future reference.
 
 ## Conclusion
 
@@ -731,34 +730,32 @@ In that case, you will get only the response part, but this is enough, to see if
 
 ```typescript
 async function getPreparedResponse() {
-    const attestationType = toHex("Payment");
-    const sourceType = toHex("testBTC");
-    // Attestation Request object to be sent to API endpoint
-    const requestData = {
-        "attestationType": attestationType,
-        "sourceId": sourceType,
-        "requestBody": {
-            "transactionId": BTC_TRANSACTION_ID,
-            "inUtxo": "8",
-            "utxo": "4"
-        }
-    }
+  const attestationType = toHex('Payment');
+  const sourceType = toHex('testBTC');
+  // Attestation Request object to be sent to API endpoint
+  const requestData = {
+    attestationType: attestationType,
+    sourceId: sourceType,
+    requestBody: {
+      transactionId: BTC_TRANSACTION_ID,
+      inUtxo: '8',
+      utxo: '4',
+    },
+  };
 
-    const response = await fetch(
-        `${ATTESTATION_URL}/verifier/btc/Payment/prepareResponse`,
-        {
-            method: "POST",
-            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
-            body: JSON.stringify(requestData)
-        }
-    );
-    const data = await response.json();
-    console.log("Prepared response:", data);
-    return data;
+  const response = await fetch(`${ATTESTATION_URL}/verifier/btc/Payment/prepareResponse`, {
+    method: 'POST',
+    headers: { 'X-API-KEY': ATTESTATION_API_KEY as string, 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestData),
+  });
+  const data = await response.json();
+  console.log('Prepared response:', data);
+  return data;
 }
 ```
 
 And we get just the response part - compare it, it is the same as the one we used to interact with the contract.
+
 ```json
 {
   "status": "VALID",
@@ -766,23 +763,23 @@ And we get just the response part - compare it, it is the same as the one we use
     "attestationType": "0x5061796d656e7400000000000000000000000000000000000000000000000000",
     "lowestUsedTimestamp": "1707293909",
     "requestBody": {
-        "inUtxo": "8",
-        "transactionId": "0x01c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d1",
-        "utxo": "4"
+      "inUtxo": "8",
+      "transactionId": "0x01c17d143c03b459707f540fd5ee9f02a730c4cd114f310ef294b706ccf131d1",
+      "utxo": "4"
     },
     "responseBody": {
-        "blockNumber": "2577266",
-        "blockTimestamp": "1707293909",
-        "intendedReceivedAmount": "11091745",
-        "intendedReceivingAddressHash": "0xd4045c296d33c3a727a40d8284b9b3d8fb65c1d8acc21da68143d6d1e4c19b39",
-        "intendedSpentAmount": "25800382",
-        "oneToOne": false,
-        "receivedAmount": "11091745",
-        "receivingAddressHash": "0xd4045c296d33c3a727a40d8284b9b3d8fb65c1d8acc21da68143d6d1e4c19b39",
-        "sourceAddressHash": "0x477031ede55f3ca387013295a98360bafde1839c4a2f0726e6afdba725055aa7",
-        "spentAmount": "25800382",
-        "standardPaymentReference": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "status": "0"
+      "blockNumber": "2577266",
+      "blockTimestamp": "1707293909",
+      "intendedReceivedAmount": "11091745",
+      "intendedReceivingAddressHash": "0xd4045c296d33c3a727a40d8284b9b3d8fb65c1d8acc21da68143d6d1e4c19b39",
+      "intendedSpentAmount": "25800382",
+      "oneToOne": false,
+      "receivedAmount": "11091745",
+      "receivingAddressHash": "0xd4045c296d33c3a727a40d8284b9b3d8fb65c1d8acc21da68143d6d1e4c19b39",
+      "sourceAddressHash": "0x477031ede55f3ca387013295a98360bafde1839c4a2f0726e6afdba725055aa7",
+      "spentAmount": "25800382",
+      "standardPaymentReference": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "status": "0"
     }
   }
 }
@@ -801,8 +798,9 @@ In the file `tryXRPLTransactionVerification.ts` we create a transaction on the X
 The code is pretty simple, the only important part is properly encoding the standard payment reference and pad it to 32 bytes.
 If standard payment reference conforms to the specification, it will also be returned in the response from the State Connector.
 
-An example result would be 
-```
+An example result would be
+
+```ts
 See transaction at https://testnet.xrpl.org/transactions/1D3FC0F8A2E509F2C4EC2F2F446075A60674C7C7EFE04948632444088FF54B42
 {
   status: 'VALID',
@@ -842,13 +840,13 @@ Due to the security assumptions, we can't use the same script to immediately che
 
 The script therefore only creates the transaction and prints the transaction hash or uses a provided transaction hash to check the response from the State Connector.
 
-<!--TODO:finish this code-->
+{/* <!--TODO:finish this code--> */}
 
 ## Important links
 
 To make your life easier in the future, all the important links and resources are listed below:
 
--   Flare [hardhat](https://github.com/flare-foundation/flare-hardhat-starter) and [foundry](https://github.com/flare-foundation/flare-foundry-starter) starter packs. They already include the latest versions of periphery packages.
--   State connector specification [repo](https://git.aflabs.org/flare-external/state-connector-protocol-public/-/tree/main).
--   Demo repository containing all the code from this blog [repo](https://github.com/flare-foundation/flare-demo-examples).
--   Current deployment of the State Connector on Coston testnet [0x0c13aDA1C7143Cf0a0795FFaB93eEBb6FAD6e4e3](https://coston-explorer.flare.network/address/0x0c13aDA1C7143Cf0a0795FFaB93eEBb6FAD6e4e3).
+- Flare [hardhat](https://github.com/flare-foundation/flare-hardhat-starter) and [foundry](https://github.com/flare-foundation/flare-foundry-starter) starter packs. They already include the latest versions of periphery packages.
+- State connector specification [repo](https://git.aflabs.org/flare-external/state-connector-protocol-public/-/tree/main).
+- Demo repository containing all the code from this blog [repo](https://github.com/flare-foundation/flare-demo-examples).
+- Current deployment of the State Connector on Coston testnet [0x0c13aDA1C7143Cf0a0795FFaB93eEBb6FAD6e4e3](https://coston-explorer.flare.network/address/0x0c13aDA1C7143Cf0a0795FFaB93eEBb6FAD6e4e3).

@@ -1,6 +1,14 @@
-# Additional State Connector types
+---
+title: Attestation types
+slug: attestation-types
+date: March. 15. 2024
+published: true
+thumbnailImage: /thumbnails/thumbnail-SC.png
+description: Learn about attestation types
+tags: [intermediate, state-connector, flare, attestation-types]
+---
 
-In the previous [blog post](TODO:LINK), we have covered the basics of the State Connector protocol and how to use it to prove a payment on an external chain.
+In the previous [blog post](./how-to-state-connector), we have covered the basics of the State Connector protocol and how to use it to prove a payment on an external chain.
 If you haven't done so already, I recommend reading it first, as we will be building upon the knowledge from it.
 
 This time, we will explore the other attestation types that are available in the State Connector protocol and see what else can be achieved with it.
@@ -11,68 +19,31 @@ We will take a look at the following attestation types (all currently active typ
 - [BalanceDecreasingTransaction](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/active-types/BalanceDecreasingTransaction.md): Prove that the transaction decreased the balance of the address or that the address was the initiator of the transaction.
 - [ConfirmedBLockHeightExists](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/active-types/ConfirmedBlockHeightExists.md): Prove that block with a specified height is confirmed by a specified number of confirmations and also provide some additional details about the chain block production rate.
 - [ReferencePaymentNonexistence](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/active-types/ReferencedPaymentNonexistence.md): Prove that the payment with the specified reference does not exist on the specified chain.
-This is useful if you need to prove that someone didn't pay you - did not honor the payment you have requested.
+  This is useful if you need to prove that someone didn't pay you - did not honor the payment you have requested.
 
-The specification also includes `EVMTransaction`, but this one is more complicated and powerful, and we will cover it in a separate [blog post](./blogpost-evm.md).
+The specification also includes `EVMTransaction`, but this one is more complicated and powerful, and we will cover it in a separate [blog post](TODO:soon).
 
 Each of the types is designed to prove a specific thing about - sometimes about transactions, sometimes about blocks, sometimes just to offload an expensive computation off the chain and have the result available on chain.
 The team has carefully studied the most important use cases and designed the attestation types to be safe, well-defined (to make sure, they are confirmed and understood in a non-ambiguous way), and efficient.
 
 Each of the types has an associated off-chain verifier, that is able to deconstruct the encoded request, execute the verification procedure and return the proper response.
-<!-- To find out more, how verifiers work, you can read the [verifier spec](TODO:LINK). -->
+To find out more, how verifiers work, you can read the [verifier spec](TODO:LINK).
 As with the payment type, each attestation type comes with a verification contract, that is able to verify, that the response and the Merkle proof are correct and that the response was indeed included in the Merkle tree for the round.
 The contracts are available in the [specification repository](https://github.com/flare-foundation/songbird-state-connector-protocol/tree/main/contracts/generated/verification), but as in the previous blog, we will be using the ones already deployed and made available by the periphery library.
-
-The library essentially exposed the unofficial addresses (one verifier per attestation type) like this:
-```solidity
-// Returns hardcoded unofficial deployment instances of Flare core contracts
-function auxiliaryGetIEVMTransactionVerification() internal view returns(IEVMTransactionVerification){
-    return IEVMTransactionVerification(0xf37AD1278917c04fb291C75a42e61710964Cb57c);
-}
-
-
-// Returns hardcoded unofficial deployment instances of Flare core contracts
-function auxiliaryGetIAddressValidityVerification() internal view returns(IAddressValidityVerification){
-    return IAddressValidityVerification(0xd94721da1dD5e222020D256fC073e8Be301ebdCB);
-}
-
-
-// Returns hardcoded unofficial deployment instances of Flare core contracts
-function auxiliaryGetIBalanceDecreasingTransactionVerification() internal view returns(IBalanceDecreasingTransactionVerification){
-    return IBalanceDecreasingTransactionVerification(0xeDa84A2eeDfdA53e7c33ef5fDe7B2798B910BF4A);
-}
-
-
-// Returns hardcoded unofficial deployment instances of Flare core contracts
-function auxiliaryGetIConfirmedBlockHeightExistsVerification() internal view returns(IConfirmedBlockHeightExistsVerification){
-    return IConfirmedBlockHeightExistsVerification(0x632A984d63f9Ae3C2Eb31e0dc2EeEaE1E282E0da);
-}
-
-
-// Returns hardcoded unofficial deployment instances of Flare core contracts
-function auxiliaryGetIPaymentVerification() internal view returns(IPaymentVerification){
-    return IPaymentVerification(0x1ECe6dd08D19c0faf3AB8cEcB146cd5ea5b9b7d9);
-}
-
-
-// Returns hardcoded unofficial deployment instances of Flare core contracts
-function auxiliaryGetIReferencedPaymentNonexistenceVerification() internal view returns(IReferencedPaymentNonexistenceVerification){
-    return IReferencedPaymentNonexistenceVerification(0xDfE5926fABA166187B29C33BC95DfDb18bbE52cd);
-}
-```
 Don't forget, verifying the proof is just the first part - this tells you, that a request was indeed included in the Merkle tree, but you still need to verify, that the response matches your dapp's requirements (payment is large enough, the address is correct, the transaction was successful, time range is sufficient).
 
-<!-- As usual, the whole block with full code is available in the [GitHub repository](TODO:LINK), and you are encouraged to follow if and try it out on your own. -->
+As usual, the whole block with full code is available in the [GitHub repository](TODO:LINK), and you are encouraged to follow if and try it out on your own.
 
 In the previous blog, we have seen, how the whole process works:
+
 1. Observe, that something you want has happened
 2. Prepare request for the attestation (using your attestation client API)
 3. Submit the request to the State Connector
 4. Wait for the State Connector to confirm the request
 5. Once the request is confirmed, prepare the response and use it
-  - Verify, that the response is really included in the state connector root (use the verification contract)
-  - Validate, that the response is the one you expect - correct payment, correct address...
 
+- Verify, that the response is really included in the state connector root (use the verification contract)
+- Validate, that the response is the one you expect - correct payment, correct address...
 
 The process is the same for all the attestation types, so we will not be repeating the whole process for each type, but we will go through each of the types and see how to prepare the request for them and what we get in return.
 
@@ -91,23 +62,23 @@ Let's first try to prepare a request for the `Payment` type (which we already ex
 Pick some btc transaction from the block explorer and prepare the request for it.
 If you are doing this on a test network, the `sourceId` in the example request is wrong (it should be `testBTC`), but if you try to execute a request with wrong `sourceId`, the attestation client will reject it, and you will get a nice error message on what you should fix.
 
-<!--TODO: add example image-->
+{/* <!--TODO: add example image--> */}
 
 Apart from the available attestation types, you can also see the diagnostic endpoints, that allow you to get information about the chain the attestation client is observing.
 
 The endpoints are:
+
 - `state` - returns the current state of the attestation client (what blocks are indexed, tip height, etc.)
 - `block-range` - returns the range of blocks the attestation client is currently observing
 - `transaction` - Returns full information about transaction with the specified ID (do **not** prefix it with `0x`). Try it with a random transaction ID and marvel at all the information you get in return.
 - `block` - Returns full information about block with the specified hash. Try it with the current tip height and see what you get in return.
 - `confirmedBlockAt` - Same as block by hash, but you specify the block number.
 - `blockHeight` - Returns the current tip height of the chain (due to the required amount of confirmations, the tip height might be different that the block range).
-This is the height of latest block that has been observed, but is not confirmed by the required number of confirmations.
+  This is the height of latest block that has been observed, but is not confirmed by the required number of confirmations.
 - `transactionBlock` - Returns the block information in which the transaction with the specified ID is included.
 - `transactions` - Returns the list of transactions currently indexed (this is controlled by the block range of the indexer).
 
 The method here are not necessary to use the State connector, but they are very useful for debugging and getting information about the chain and will prove very useful when you are building your dapp.
-
 
 ## Attestation types
 
@@ -121,54 +92,46 @@ To make matters simpler, we will just check what the response would be directly 
 
 // Simple hex encoding
 function toHex(data: string): string {
-    var result = "";
-    for (var i = 0; i < data.length; i++) {
-        result += data.charCodeAt(i).toString(16);
-    }
-    return "0x" + result.padEnd(64, "0");
+  var result = '';
+  for (var i = 0; i < data.length; i++) {
+    result += data.charCodeAt(i).toString(16);
+  }
+  return '0x' + result.padEnd(64, '0');
 }
 
 interface AttestationResponse {
-    abiEncodedRequest: string;
-    status: string;
+  abiEncodedRequest: string;
+  status: string;
 }
 
 async function prepareAttestationRequest(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<AttestationRequest> {
-    const response = await fetch(
-        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareRequest`,
-        {
-            method: "POST",
-            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                "attestationType": toHex(attestationType),
-                "sourceId": toHex(sourceId),
-                "requestBody": requestBody
-            })
-        }
-    );
-    const data = await response.json();
-    return data;
+  const response = await fetch(`${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareRequest`, {
+    method: 'POST',
+    headers: { 'X-API-KEY': ATTESTATION_API_KEY as string, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      attestationType: toHex(attestationType),
+      sourceId: toHex(sourceId),
+      requestBody: requestBody,
+    }),
+  });
+  const data = await response.json();
+  return data;
 }
 
 async function prepareAttestationResponse(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<any> {
-    const response = await fetch(
-        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`,
-        {
-            method: "POST",
-            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                "attestationType": toHex(attestationType),
-                "sourceId": toHex(sourceId),
-                "requestBody": requestBody
-            })
-        }
-    );
-    const data = await response.json();
-    return data;
+  const response = await fetch(`${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`, {
+    method: 'POST',
+    headers: { 'X-API-KEY': ATTESTATION_API_KEY as string, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      attestationType: toHex(attestationType),
+      sourceId: toHex(sourceId),
+      requestBody: requestBody,
+    }),
+  });
+  const data = await response.json();
+  return data;
 }
-
 ```
-
 
 Here, we assume, that our verifier supports all attestation types and networks - that is not required from all the verifiers, but it is a good practice to have a single endpoint for all the requests and route them to the correct verifier based on the request.
 
@@ -178,8 +141,8 @@ If we wanted to change the network type we look at, we would have to change the 
 
 Similarly, verifier contracts (the ones, that check the response together with the Merkle proof is included in the state connector round) are very similar, the only difference is the type the verification function receives (and thus the type they verify), but then the type is encoded, hashed and the rest of the check is the same.
 
-<!-- TODO: Any generic stuff and code 
-A mogoče tukaj dam kako stvari poganjat - če ne drgje bi mogl bit že v prvem blogu. -->
+TODO: Any generic stuff and code
+A mogoče tukaj dam kako stvari poganjat - če ne drgje bi mogl bit že v prvem blogu.
 
 Now, let's take a look at each of the attestation types and see how to prepare the request for them, what we need to provide and what we get in return.
 
@@ -200,7 +163,7 @@ This way, we can track the balance decrease of address even if the balance chang
 
 The type definition is as follows:
 
-```solidity
+```ts
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.7.6 <0.9;
 
@@ -312,14 +275,16 @@ interface BalanceDecreasingTransaction {
 ```
 
 The request body consist of only two arguments:
+
 - `transactionId` - the ID of the payment transaction we want to prove (same as with payment)
 - `sourceAddressIndicator` - the indicator of the address whose balance has been decreased.
-On Bitcoin and Dogecoin, this is the index of the transaction input in hex padded to a 0x prefixed 32-byte string (Very similar as inUtxo in payment type). On XRPL, this is the standard address hash of the address whose balance we want to prove has decreased.
+  On Bitcoin and Dogecoin, this is the index of the transaction input in hex padded to a 0x prefixed 32-byte string (Very similar as inUtxo in payment type). On XRPL, this is the standard address hash of the address whose balance we want to prove has decreased.
 
 Once the request is submitted, the verifiers will check the transaction, do full accounting of the requested source address and confirm the response if and only if the transaction is indeed decreasing the balance of the address or the address is among the signers of the transaction.
 In short, the request won't be confirmed if the balance stays the same and the address is not among the signers of the transaction, so there is no way to have a false positive.
 
 If the address has indeed decreased the balance(or participated as signer), the response will also contain information about when exactly the offending transaction has happened - the balance decrease might be allowed (after certain time, or with correct payment reference).
+
 - `blockNumber` - the number of the block in which the transaction is included.
 - `blockTimestamp` - the timestamp of the block in which the transaction is included (for utxo chains, this is `mediantime`, for XRPL, this is `close_time` of the ledger).
 - `sourceAddressHash` - standard address hash of the address indicated by the `sourceAddressIndicator`. If on utxo chain, this gives us the address that controlled the designated input.
@@ -328,7 +293,7 @@ If the address has indeed decreased the balance(or participated as signer), the 
 
 Let's see how the verification contract looks
 
-```solidity
+```ts
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
@@ -375,116 +340,109 @@ The code is practically the same as before, we just make the request to a differ
 As said before, specifying address is important, since address' balance might have decreased in the transaction, but its participation was only minimal (or was not even part of the initial signers).
 For the utxo chains, we also need to specify `sourceAddressIndicator`, as many addresses might be involved in the transaction (by signing an array of outputs) and we need to specify which one we want to prove the balance decrease for and request the verifiers to do the whole accounting.
 
-
 ```typescript
-const xrpl = require("xrpl")
+const xrpl = require('xrpl');
 
 const { XRPL_PRIVATE_KEY, ATTESTATION_URL, ATTESTATION_API_KEY, USE_TESTNET_ATTESTATIONS } = process.env;
-const receiverAddress = "r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj"
+const receiverAddress = 'r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj';
 
 function toHex(data: string): string {
-    var result = "";
-    for (var i = 0; i < data.length; i++) {
-        result += data.charCodeAt(i).toString(16);
-    }
-    return "0x" + result.padEnd(64, "0");
+  var result = '';
+  for (var i = 0; i < data.length; i++) {
+    result += data.charCodeAt(i).toString(16);
+  }
+  return '0x' + result.padEnd(64, '0');
 }
 
 function fromHex(data: string): string {
-    data = data.replace(/^(0x\.)/, '');
-    return data
-        .split(/(\w\w)/g)
-        .filter(p => !!p)
-        .map(c => String.fromCharCode(parseInt(c, 16)))
-        .join('');
+  data = data.replace(/^(0x\.)/, '');
+  return data
+    .split(/(\w\w)/g)
+    .filter((p) => !!p)
+    .map((c) => String.fromCharCode(parseInt(c, 16)))
+    .join('');
 }
 
 async function prepareAttestationResponse(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<AttestationResponse> {
-    const response = await fetch(
-        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`,
-        {
-            method: "POST",
-            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                "attestationType": toHex(attestationType),
-                "sourceId": toHex(sourceId),
-                "requestBody": requestBody
-            })
-        }
-    );
-    const data = await response.json();
-    return data;
+  const response = await fetch(`${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`, {
+    method: 'POST',
+    headers: { 'X-API-KEY': ATTESTATION_API_KEY as string, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      attestationType: toHex(attestationType),
+      sourceId: toHex(sourceId),
+      requestBody: requestBody,
+    }),
+  });
+  const data = await response.json();
+  return data;
 }
 
 async function getXRPLclient(): Promise<any> {
-    const client = new xrpl.Client("wss://s.altnet.rippletest.net:51233")
-    await client.connect()
+  const client = new xrpl.Client('wss://s.altnet.rippletest.net:51233');
+  await client.connect();
 
-    return client
+  return client;
 }
 
-async function sendXRPLTransaction(message: string = "", amount: number = 10, target: string = "r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj"): Promise<string> {
-    const client = await getXRPLclient()
+async function sendXRPLTransaction(message: string = '', amount: number = 10, target: string = 'r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj'): Promise<string> {
+  const client = await getXRPLclient();
 
-    const test_wallet = xrpl.Wallet.fromSeed(XRPL_PRIVATE_KEY)
+  const test_wallet = xrpl.Wallet.fromSeed(XRPL_PRIVATE_KEY);
 
-    let memos = []
-    if (message) {
-        // Standard payment reference must be 32 bytes - so we right pad with 0
-        const MemoData = xrpl.convertStringToHex(message).padEnd(64, "0")
-        const MemoType = xrpl.convertStringToHex("Text");
-        const MemoFormat = xrpl.convertStringToHex("text/plain");
+  let memos = [];
+  if (message) {
+    // Standard payment reference must be 32 bytes - so we right pad with 0
+    const MemoData = xrpl.convertStringToHex(message).padEnd(64, '0');
+    const MemoType = xrpl.convertStringToHex('Text');
+    const MemoFormat = xrpl.convertStringToHex('text/plain');
 
-        memos.push({
-            "Memo": {
-                "MemoType": MemoType,
-                "MemoData": MemoData,
-                "MemoFormat": MemoFormat
-            }
-        })
-    }
+    memos.push({
+      Memo: {
+        MemoType: MemoType,
+        MemoData: MemoData,
+        MemoFormat: MemoFormat,
+      },
+    });
+  }
 
-    const transaction = await client.autofill({
-        "TransactionType": "Payment",
-        "Account": test_wallet.address,
-        "Amount": amount.toString(),
-        "Destination": target,
-        "Memos": memos,
-    })
+  const transaction = await client.autofill({
+    TransactionType: 'Payment',
+    Account: test_wallet.address,
+    Amount: amount.toString(),
+    Destination: target,
+    Memos: memos,
+  });
 
-    const signed = test_wallet.sign(transaction)
-    console.log(`See transaction at https://testnet.xrpl.org/transactions/${signed.hash}`)
-    await client.submitAndWait(signed.tx_blob)
+  const signed = test_wallet.sign(transaction);
+  console.log(`See transaction at https://testnet.xrpl.org/transactions/${signed.hash}`);
+  await client.submitAndWait(signed.tx_blob);
 
-    await client.disconnect()
+  await client.disconnect();
 
-    // sleep for 10 seconds to allow the transaction to be processed
-    await new Promise(resolve => setTimeout(resolve, 10 * 1000))
+  // sleep for 10 seconds to allow the transaction to be processed
+  await new Promise((resolve) => setTimeout(resolve, 10 * 1000));
 
-    const result = await prepareAttestationResponse("BalanceDecreasingTransaction", "xrp", "testXRP",
-        {
-            "transactionId": "0x" + signed.hash,
-            "sourceAddressIndicator": web3.utils.soliditySha3(test_wallet.address),
-        }
-    )
+  const result = await prepareAttestationResponse('BalanceDecreasingTransaction', 'xrp', 'testXRP', {
+    transactionId: '0x' + signed.hash,
+    sourceAddressIndicator: web3.utils.soliditySha3(test_wallet.address),
+  });
 
-    console.log(
-        result
-    );
+  console.log(result);
 
-    console.log(fromHex(result.response.responseBody.standardPaymentReference));
+  console.log(fromHex(result.response.responseBody.standardPaymentReference));
 }
 
 async function main() {
-    await sendXRPLTransaction("Hello world!")
+  await sendXRPLTransaction('Hello world!');
 }
 
-main().then(() => process.exit(0))
+main().then(() => process.exit(0));
 ```
 
 We create a transaction, wait for it to be processed and then prepare response that checks, that it was really a balance decreasing transaction.
 
 An example response would look like this:
+
 ```json
 {
     "status": "VALID",
@@ -508,10 +466,9 @@ An example response would look like this:
 Hello world!
 ```
 
-
 All the fields are populated correctly and most importantly, although, the transaction sent 10 XRP drops, the response nicely shows, that the balance decreased by 22, as 12 was spent on transaction fee.
 
-<!-- TODO:BTC Example, and if possible one with XRPL clawback -->
+{/* <!-- TODO:BTC Example, and if possible one with XRPL clawback --> */}
 
 ### Confirmed Block Height Exists
 
@@ -524,7 +481,7 @@ It is also a good way to observe if the other chain is progressing and not halte
 
 Let's see the type specification:
 
-```solidity
+```ts
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.7.6 <0.9;
 
@@ -633,6 +590,7 @@ What do we get in return?
 Remember, as per spec, we only get the information that the block with `blockNumber` is confirmed by at least `numberOfConfirmations`.
 If the block is not confirmed, the request is rejected (none of the attestation clients will confirm the response and it will not be included in the Merkle tree).
 The response body contains the following fields:
+
 - `blockTimestamp` - the timestamp of the block with `blockNumber`.
 - `numberOfConfirmations` - the depth at which a block is considered confirmed depending on the chain. This is fixed per chain and the same as in the specification.
 - `lowestQueryWindowBlockNumber` - the block number of the latest block that has a timestamp strictly smaller than `blockTimestamp` - `queryWindow`. This allows us to gauge the average block production time in the specified block range.
@@ -655,87 +613,82 @@ Go, take the following code (also in `tryConfirmedBlockHeightExists.ts`) and try
 const { ATTESTATION_URL, ATTESTATION_API_KEY } = process.env;
 
 function toHex(data: string): string {
-    var result = "";
-    for (var i = 0; i < data.length; i++) {
-        result += data.charCodeAt(i).toString(16);
-    }
-    return "0x" + result.padEnd(64, "0");
+  var result = '';
+  for (var i = 0; i < data.length; i++) {
+    result += data.charCodeAt(i).toString(16);
+  }
+  return '0x' + result.padEnd(64, '0');
 }
 
 function fromHex(data: string): string {
-    data = data.replace(/^(0x\.)/, '');
-    return data
-        .split(/(\w\w)/g)
-        .filter(p => !!p)
-        .map(c => String.fromCharCode(parseInt(c, 16)))
-        .join('');
+  data = data.replace(/^(0x\.)/, '');
+  return data
+    .split(/(\w\w)/g)
+    .filter((p) => !!p)
+    .map((c) => String.fromCharCode(parseInt(c, 16)))
+    .join('');
 }
 
 async function prepareAttestationResponse(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<AttestationResponse> {
-
-    const response = await fetch(
-        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`,
-        {
-            method: "POST",
-            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                "attestationType": toHex(attestationType),
-                "sourceId": toHex(sourceId),
-                "requestBody": requestBody
-            })
-        }
-    );
-    const data = await response.json();
-    return data;
+  const response = await fetch(`${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`, {
+    method: 'POST',
+    headers: { 'X-API-KEY': ATTESTATION_API_KEY as string, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      attestationType: toHex(attestationType),
+      sourceId: toHex(sourceId),
+      requestBody: requestBody,
+    }),
+  });
+  const data = await response.json();
+  return data;
 }
 
 async function getVerifierBlockRange(network: string): Promise<any> {
-    return (await (await fetch(
-        `${ATTESTATION_URL}/verifier/${network}/api/indexer/block-range`,
-        {
-            method: "GET",
-            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" }
-        }
-    )).json()).data
+  return (
+    await (
+      await fetch(`${ATTESTATION_URL}/verifier/${network}/api/indexer/block-range`, {
+        method: 'GET',
+        headers: { 'X-API-KEY': ATTESTATION_API_KEY as string, 'Content-Type': 'application/json' },
+      })
+    ).json()
+  ).data;
 }
 
 async function main() {
-    const btcRange = await getVerifierBlockRange("btc")
-    const dogeRange = await getVerifierBlockRange("doge")
-    const xrplRange = await getVerifierBlockRange("xrp")
+  const btcRange = await getVerifierBlockRange('btc');
+  const dogeRange = await getVerifierBlockRange('doge');
+  const xrplRange = await getVerifierBlockRange('xrp');
 
-    console.log("BTC Range: ", btcRange)
-    console.log(
-        await prepareAttestationResponse("ConfirmedBlockHeightExists", "btc", "testBTC",
-            {
-                blockNumber: btcRange.last.toString(),
-                queryWindow: "123"
-            })
-    )
+  console.log('BTC Range: ', btcRange);
+  console.log(
+    await prepareAttestationResponse('ConfirmedBlockHeightExists', 'btc', 'testBTC', {
+      blockNumber: btcRange.last.toString(),
+      queryWindow: '123',
+    })
+  );
 
-    console.log("DOGE Range: ", dogeRange)
-    console.log(
-        await prepareAttestationResponse("ConfirmedBlockHeightExists", "doge", "testDOGE",
-            {
-                blockNumber: dogeRange.last.toString(),
-                queryWindow: "123"
-            })
-    )
+  console.log('DOGE Range: ', dogeRange);
+  console.log(
+    await prepareAttestationResponse('ConfirmedBlockHeightExists', 'doge', 'testDOGE', {
+      blockNumber: dogeRange.last.toString(),
+      queryWindow: '123',
+    })
+  );
 
-    console.log("XRPL Range: ", xrplRange)
-    console.log(
-        await prepareAttestationResponse("ConfirmedBlockHeightExists", "xrp", "testXRP",
-            {
-                blockNumber: xrplRange.last.toString(),
-                queryWindow: "123"
-            })
-    )
+  console.log('XRPL Range: ', xrplRange);
+  console.log(
+    await prepareAttestationResponse('ConfirmedBlockHeightExists', 'xrp', 'testXRP', {
+      blockNumber: xrplRange.last.toString(),
+      queryWindow: '123',
+    })
+  );
 }
 
-main().then(() => process.exit(0))
+main().then(() => process.exit(0));
 ```
 
 And we get the example response
+
 ```json
 BTC Range:  { first: 2578997, last: 2579392 }
 {
@@ -798,9 +751,10 @@ In this case, the response is `INDETERMINATE` - so not confirmed, but it does in
 Go, take the code and try to check for the block that is not yet confirmed by the correct amount and see the response you get.
 The easiest way is to just add 10 to the block range and see what happens.
 If you did it correctly, the response should be
+
 ```json
-{ 
-    "status": "INDETERMINATE"
+{
+  "status": "INDETERMINATE"
 }
 ```
 
@@ -818,7 +772,7 @@ Let's check a bit more involved one - the `ReferencePaymentNonexistence` type.
 This one is a bit more difficult to implement and properly use, as we are forcing the attestation client to do a lot of work - they need to prove that a certain payment has not been made.
 In that case, instead of looking at the transaction and checking if it is valid, we are going to be looking at the block range and checking that no valid payment conforming to our requirements has been made in the specified block range.
 
-```solidity
+```ts
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.7.6 <0.9;
 
@@ -829,9 +783,9 @@ pragma solidity >=0.7.6 <0.9;
  * @author Flare
  * @notice Assertion that an agreed-upon payment has not been made by a certain deadline.
  * A confirmed request shows that a transaction meeting certain criteria (address, amount, reference) did not appear in the specified block range.
- * 
- * 
- * This type of attestation can be used to e.g. provide grounds to liquidate funds locked by a smart contract on Flare when a payment is missed. 
+ *
+ *
+ * This type of attestation can be used to e.g. provide grounds to liquidate funds locked by a smart contract on Flare when a payment is missed.
  *
  * @custom:verification If `firstOverflowBlock` cannot be determined or does not have a sufficient [number of confirmations](/specs/attestations/configs.md#finalityconfirmation), the attestation request is rejected.
  * If `firstOverflowBlockNumber` is higher or equal to `minimalBlockNumber`, the request is rejected.
@@ -850,7 +804,7 @@ pragma solidity >=0.7.6 <0.9;
  * - The transaction has the specified [standardPaymentReference](/specs/attestations/external-chains/standardPaymentReference.md#btc-and-doge-blockchains).
  * - The sum of values of all outputs with the specified address minus the sum of values of all inputs with the specified address is greater than `amount` (in practice the sum of all values of the inputs with the specified address is zero).
  *
- * 
+ *
  * Timestamp is `mediantime`.
 
  * ### XRPL
@@ -864,7 +818,7 @@ pragma solidity >=0.7.6 <0.9;
  *   - Transaction status is `SUCCESS` and the amount received by the specified destination address is greater than the specified `value`.
  *   - Transaction status is `RECEIVER_FAILURE` and the specified destination address would receive an amount greater than the specified `value` had the transaction been successful.
  *
- * 
+ *
  * Timestamp is `close_time` converted to UNIX time.
  *
  * @custom:lut `minimalBlockTimestamp`
@@ -947,17 +901,18 @@ interface ReferencedPaymentNonexistence {
 }
 ```
 
-
 The request body is a bit bigger this time, as we have to specify the range of blocks we want to check and the criteria for the payment we want to check.
+
 - `minimalBlockNumber` - the start block of the search range.
 - `deadlineBlockNumber` - the blockNumber to be included in the search range.
 - `deadlineTimestamp` - the timestamp to be included in the search range.
-As we include both block number and timestamp, the requested range will be the such, that it will include all blocks from `minimalBlockNumber` to `deadlineBlockNumber` and all blocks with timestamps from `minimalBlockTimestamp` to `deadlineTimestamp`.
+  As we include both block number and timestamp, the requested range will be the such, that it will include all blocks from `minimalBlockNumber` to `deadlineBlockNumber` and all blocks with timestamps from `minimalBlockTimestamp` to `deadlineTimestamp`.
 - `destinationAddressHash` - the standard address hash of the address to which the payment had to be done.
 - `amount` - the requested amount in minimal units that had to be payed. The amount is chain specific.
 - `standardPaymentReference` - the requested standard payment reference. This is the reference that the payment had to have.
 
 The response body is a bit simpler and essentially contains the searched range
+
 - `minimalBlockTimestamp` - the timestamp of the minimalBlock that was included in the search range - this is the timestamp of the block with `minimalBlockNumber`.
 - `firstOverflowBlockNumber` - the height of the firstOverflowBlock. This is the first block that has block number higher than `deadlineBlockNumber` AND timestamp later than `deadlineTimestamp`.
 - `firstOverflowBlockTimestamp` - the timestamp of the firstOverflowBlock. This is the timestamp of the first block that has block number higher than `deadlineBlockNumber` AND timestamp later than `deadlineTimestamp`.
@@ -972,193 +927,184 @@ To produce a nice and correct example that allows us to test everything properly
 Since we are proving a negative, any mistake we make during request preparation will result in transaction that was not made (a simple misencoding of memo field would almost certainly produce a non-existing transaction) and gave us a false sense of security.
 
 To be a bit more certain, we will structure our request more carefully:
+
 1. Create a transaction with reference payment and some nonzero value.
 2. First try to confirm `Payment` attestation request and make sure that we get back the correct reference and value - this means that the transaction is seen.
-We will then use information when this transaction has happened, to construct a range that will be used in the next step - and we are sure, that it contains our transaction.
+   We will then use information when this transaction has happened, to construct a range that will be used in the next step - and we are sure, that it contains our transaction.
 3. We will then make three requests for non-existing payment:
-    - One with correct (or lower) value and correct reference - This one will return `INVALID`, as the verifier can't prove the non existence of such transaction
-    - One with the correct value, but slightly wrong payment reference (change just one index) - This one should be confirmed, as no such transaction exists (the payment reference does not match)
-    - One with to large value, but correct payment reference. This one should be confirmed, as the transaction with payment reference exists, but does not transfer enough value.   
+   - One with correct (or lower) value and correct reference - This one will return `INVALID`, as the verifier can't prove the non existence of such transaction
+   - One with the correct value, but slightly wrong payment reference (change just one index) - This one should be confirmed, as no such transaction exists (the payment reference does not match)
+   - One with to large value, but correct payment reference. This one should be confirmed, as the transaction with payment reference exists, but does not transfer enough value.
 
 ##### XRP Ledger
+
 The example code that showcases this on testnet XRP Ledger is available in `tryXRPLPaymentNonExistence.ts`.
 
 ```typescript
-const xrpl = require("xrpl")
+const xrpl = require('xrpl');
 
 const { XRPL_PRIVATE_KEY, ATTESTATION_URL, ATTESTATION_API_KEY } = process.env;
-const receiverAddress = "r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj"
+const receiverAddress = 'r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj';
 
 function toHex(data: string): string {
-    var result = "";
-    for (var i = 0; i < data.length; i++) {
-        result += data.charCodeAt(i).toString(16);
-    }
-    return "0x" + result.padEnd(64, "0");
+  var result = '';
+  for (var i = 0; i < data.length; i++) {
+    result += data.charCodeAt(i).toString(16);
+  }
+  return '0x' + result.padEnd(64, '0');
 }
 
 function fromHex(data: string): string {
-    data = data.replace(/^(0x\.)/, '');
-    return data
-        .split(/(\w\w)/g)
-        .filter(p => !!p)
-        .map(c => String.fromCharCode(parseInt(c, 16)))
-        .join('');
+  data = data.replace(/^(0x\.)/, '');
+  return data
+    .split(/(\w\w)/g)
+    .filter((p) => !!p)
+    .map((c) => String.fromCharCode(parseInt(c, 16)))
+    .join('');
 }
 
 async function prepareAttestationResponse(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<AttestationResponse> {
-    const response = await fetch(
-        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`,
-        {
-            method: "POST",
-            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                "attestationType": toHex(attestationType),
-                "sourceId": toHex(sourceId),
-                "requestBody": requestBody
-            })
-        }
-    );
-    const data = await response.json();
-    return data;
+  const response = await fetch(`${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`, {
+    method: 'POST',
+    headers: { 'X-API-KEY': ATTESTATION_API_KEY as string, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      attestationType: toHex(attestationType),
+      sourceId: toHex(sourceId),
+      requestBody: requestBody,
+    }),
+  });
+  const data = await response.json();
+  return data;
 }
 
 async function getXRPLclient(): Promise<any> {
-    const client = new xrpl.Client("wss://s.altnet.rippletest.net:51233")
-    await client.connect()
+  const client = new xrpl.Client('wss://s.altnet.rippletest.net:51233');
+  await client.connect();
 
-    return client
+  return client;
 }
 
-async function sendXRPLTransaction(message: string = "", amount: number = 10, target: string = "r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj"): Promise<string> {
-    const client = await getXRPLclient()
+async function sendXRPLTransaction(message: string = '', amount: number = 10, target: string = 'r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj'): Promise<string> {
+  const client = await getXRPLclient();
 
-    const test_wallet = xrpl.Wallet.fromSeed(XRPL_PRIVATE_KEY)
+  const test_wallet = xrpl.Wallet.fromSeed(XRPL_PRIVATE_KEY);
 
-    // Standard payment reference must be 32 bytes - so we right pad with 0
-    const MemoData = xrpl.convertStringToHex(message).padEnd(64, "0")
-    const MemoType = xrpl.convertStringToHex("Text");
-    const MemoFormat = xrpl.convertStringToHex("text/plain");
+  // Standard payment reference must be 32 bytes - so we right pad with 0
+  const MemoData = xrpl.convertStringToHex(message).padEnd(64, '0');
+  const MemoType = xrpl.convertStringToHex('Text');
+  const MemoFormat = xrpl.convertStringToHex('text/plain');
 
-    let memos = []
-    if (message) {
-        memos.push({
-            "Memo": {
-                "MemoType": MemoType,
-                "MemoData": MemoData,
-                "MemoFormat": MemoFormat
-            }
-        })
-    }
+  let memos = [];
+  if (message) {
+    memos.push({
+      Memo: {
+        MemoType: MemoType,
+        MemoData: MemoData,
+        MemoFormat: MemoFormat,
+      },
+    });
+  }
 
-    const transaction = await client.autofill({
-        "TransactionType": "Payment",
-        "Account": test_wallet.address,
-        "Amount": amount.toString(),
-        "Destination": target,
-        "Memos": memos,
-    })
+  const transaction = await client.autofill({
+    TransactionType: 'Payment',
+    Account: test_wallet.address,
+    Amount: amount.toString(),
+    Destination: target,
+    Memos: memos,
+  });
 
-    const signed = test_wallet.sign(transaction)
-    console.log(`See transaction at https://testnet.xrpl.org/transactions/${signed.hash}`)
-    await client.submitAndWait(signed.tx_blob)
+  const signed = test_wallet.sign(transaction);
+  console.log(`See transaction at https://testnet.xrpl.org/transactions/${signed.hash}`);
+  await client.submitAndWait(signed.tx_blob);
 
-    await client.disconnect()
+  await client.disconnect();
 
-    // sleep for 10 seconds to allow the transaction to be processed
-    await new Promise(resolve => setTimeout(resolve, 10 * 1000))
-    console.log("Payment:")
-    // 1. prove the payment:
-    const resultPayment = await prepareAttestationResponse("Payment", "xrp", "testXRP",
-        {
-            "transactionId": "0x" + signed.hash,
-            "inUtxo": "0",
-            "utxo": "0"
-        }
-    )
+  // sleep for 10 seconds to allow the transaction to be processed
+  await new Promise((resolve) => setTimeout(resolve, 10 * 1000));
+  console.log('Payment:');
+  // 1. prove the payment:
+  const resultPayment = await prepareAttestationResponse('Payment', 'xrp', 'testXRP', {
+    transactionId: '0x' + signed.hash,
+    inUtxo: '0',
+    utxo: '0',
+  });
 
-    if (resultPayment.status != "VALID") {
-        console.log("Something wrong when confirming payment");
-    }
-    console.log(resultPayment)
-    if (resultPayment.response.responseBody.standardPaymentReference != ("0x" + MemoData)) {
-        console.log("Something wrong with message reference");
-        console.log(resultPayment.response.responseBody.standardPaymentReference);
-        console.log(MemoData);
-    }
-    if (resultPayment.response.responseBody.receivingAddressHash != web3.utils.soliditySha3(target)) {
-        console.log("Something wrong with target address hash");
-    }
+  if (resultPayment.status != 'VALID') {
+    console.log('Something wrong when confirming payment');
+  }
+  console.log(resultPayment);
+  if (resultPayment.response.responseBody.standardPaymentReference != '0x' + MemoData) {
+    console.log('Something wrong with message reference');
+    console.log(resultPayment.response.responseBody.standardPaymentReference);
+    console.log(MemoData);
+  }
+  if (resultPayment.response.responseBody.receivingAddressHash != web3.utils.soliditySha3(target)) {
+    console.log('Something wrong with target address hash');
+  }
 
-    // Get information about transaction: block and block timestamp -> we will need this to create the range, where the transaction has happened
-    console.log("Failing non existence proof:")
-    const blockNumber = Number(resultPayment.response.responseBody.blockNumber)
-    const blockTimestamp = Number(resultPayment.response.responseBody.blockTimestamp)
+  // Get information about transaction: block and block timestamp -> we will need this to create the range, where the transaction has happened
+  console.log('Failing non existence proof:');
+  const blockNumber = Number(resultPayment.response.responseBody.blockNumber);
+  const blockTimestamp = Number(resultPayment.response.responseBody.blockTimestamp);
 
-    const targetRange = {
-        minimalBlockNumber: (blockNumber - 5).toString(), // Search few block before
-        deadlineBlockNumber: (blockNumber + 1).toString(), // Search a few blocks after, but not too much, as they need to already be indexed by attestation clients
-        deadlineTimestamp: (blockTimestamp + 3).toString(), // Search a bit after
-        destinationAddressHash: web3.utils.soliditySha3(target) // The target address for transaction
-    }
+  const targetRange = {
+    minimalBlockNumber: (blockNumber - 5).toString(), // Search few block before
+    deadlineBlockNumber: (blockNumber + 1).toString(), // Search a few blocks after, but not too much, as they need to already be indexed by attestation clients
+    deadlineTimestamp: (blockTimestamp + 3).toString(), // Search a bit after
+    destinationAddressHash: web3.utils.soliditySha3(target), // The target address for transaction
+  };
 
-    // Try to verify non existence for a transaction and correct parameters
-    // This should not verify it
+  // Try to verify non existence for a transaction and correct parameters
+  // This should not verify it
 
-    const resultFailedNonExistence = await prepareAttestationResponse("ReferencedPaymentNonexistence", "xrp", "testXRP",
-        {
-            ...targetRange,
-            amount: amount.toString(),
-            standardPaymentReference: "0x" + MemoData
-        }
-    )
+  const resultFailedNonExistence = await prepareAttestationResponse('ReferencedPaymentNonexistence', 'xrp', 'testXRP', {
+    ...targetRange,
+    amount: amount.toString(),
+    standardPaymentReference: '0x' + MemoData,
+  });
 
-    console.log(resultFailedNonExistence);
+  console.log(resultFailedNonExistence);
 
-    if (resultFailedNonExistence.status != "INVALID") {
-        console.log("Something wrong with failed non existence");
-    }
+  if (resultFailedNonExistence.status != 'INVALID') {
+    console.log('Something wrong with failed non existence');
+  }
 
-    console.log("Successful non existence proofs:")
+  console.log('Successful non existence proofs:');
 
-    // Change the memo field a bit and successfully prove non existence
-    let wrongMemoData = xrpl.convertStringToHex(message).padEnd(64, "1") // We pad 1 instead of 0
-    const resultWrongMemoNonExistence = await prepareAttestationResponse("ReferencedPaymentNonexistence", "xrp", "testXRP",
-        {
-            ...targetRange,
-            amount: amount.toString(),
-            standardPaymentReference: "0x" + wrongMemoData
-        }
-    )
+  // Change the memo field a bit and successfully prove non existence
+  let wrongMemoData = xrpl.convertStringToHex(message).padEnd(64, '1'); // We pad 1 instead of 0
+  const resultWrongMemoNonExistence = await prepareAttestationResponse('ReferencedPaymentNonexistence', 'xrp', 'testXRP', {
+    ...targetRange,
+    amount: amount.toString(),
+    standardPaymentReference: '0x' + wrongMemoData,
+  });
 
-    console.log(resultWrongMemoNonExistence)
+  console.log(resultWrongMemoNonExistence);
 
-    if (resultWrongMemoNonExistence.status != "VALID") {
-        console.log("Something wrong with wrong memo non existence");
-    }
+  if (resultWrongMemoNonExistence.status != 'VALID') {
+    console.log('Something wrong with wrong memo non existence');
+  }
 
-    // Change the value and successfully prove non existence.
+  // Change the value and successfully prove non existence.
 
-    const resultWrongAmountNonExistence = await prepareAttestationResponse("ReferencedPaymentNonexistence", "xrp", "testXRP",
-        {
-            ...targetRange,
-            amount: (amount + 1).toString(), // Increase the amount, so the transaction we made is now invalid
-            standardPaymentReference: "0x" + MemoData
-        }
-    )
+  const resultWrongAmountNonExistence = await prepareAttestationResponse('ReferencedPaymentNonexistence', 'xrp', 'testXRP', {
+    ...targetRange,
+    amount: (amount + 1).toString(), // Increase the amount, so the transaction we made is now invalid
+    standardPaymentReference: '0x' + MemoData,
+  });
 
-    console.log(resultWrongAmountNonExistence)
+  console.log(resultWrongAmountNonExistence);
 
-    if (resultWrongAmountNonExistence.status != "VALID") {
-        console.log("Something wrong with wrong amount non existence");
-    }
+  if (resultWrongAmountNonExistence.status != 'VALID') {
+    console.log('Something wrong with wrong amount non existence');
+  }
 }
 
 async function main() {
-    await sendXRPLTransaction("Hello world!")
+  await sendXRPLTransaction('Hello world!');
 }
 
-main().then(() => process.exit(0))
+main().then(() => process.exit(0));
 ```
 
 Keep in mind, that the requested range can be quite large, so the verifiers might not be able to confirm the response (as they might not have the view of all blocks from `minimalBlockNumber` to `firstOverflowBlockNumber`), so the request might be rejected.
@@ -1243,7 +1189,6 @@ Successful non existence proofs:
 }
 ```
 
-
 ### AddressValidity
 
 The full specification is available [here](https://github.com/flare-foundation/songbird-state-connector-protocol/blob/main/specs/attestations/active-types/AddressValidity.md).
@@ -1257,7 +1202,7 @@ The fAssets, for example, need to make sure that the address is valid before the
 
 Let's see the specification:
 
-```solidity
+```ts
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.7.6 <0.9;
 
@@ -1344,13 +1289,14 @@ interface AddressValidity {
 The request body is very simple - it just contains the `addressStr` - the address to be verified according to the chain's rules.
 
 The response body has all the meat - the request can always be confirmed (in general), we want to take a look at specific fields:
+
 - `isValid` - a boolean indicator of the address validity.
-If this is true, the address is valid according to the chain's rules.
-Remember, the merkle proof is about the validity of this request (if it was confirmed by the verifiers), not about the meaning of its response - wether the address is valid or not.
+  If this is true, the address is valid according to the chain's rules.
+  Remember, the merkle proof is about the validity of this request (if it was confirmed by the verifiers), not about the meaning of its response - wether the address is valid or not.
 - `standardAddress` - if `isValid`, this is the standard form of the validated address. Otherwise an empty string.
-This is useful if you want to use the address in your protocol - you can use the standard form of the address and not worry about the different representations of the same address.
+  This is useful if you want to use the address in your protocol - you can use the standard form of the address and not worry about the different representations of the same address.
 - `standardAddressHash` - if `isValid`, this is the standard address hash of the validated address, otherwise a zero bytes32 string.
-This is useful to verify with the standard address hash returned by `Payment` and `ReferencedPaymentNonexistence`.
+  This is useful to verify with the standard address hash returned by `Payment` and `ReferencedPaymentNonexistence`.
 
 Think of this more of as an example of what can be offloaded to off-chain computation (and verification) - and try to imagine what other things that are prohibitively expensive (or impossible due to data unavailability) on-chain can be offloaded to off-chain computation.
 
@@ -1361,95 +1307,63 @@ Remember, in real usage, we will have to first prepare a request for State Conne
 This effectively means, that our smart contract will get just the result of (possibly) huge and expensive calculation (the response body part) together with proof, that this was included in the merkle root - and thus has been calculated and attested to by the validator of the network.
 
 Full code:
+
 ```typescript
 const { ATTESTATION_URL, ATTESTATION_API_KEY } = process.env;
-const exampleXRPLAddress = "r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj"
-const someDogecoinAddress = "njyMWWyh1L7tSX6QkWRgetMVCVyVtfoDta"
-const someBTCAddress = "tb1qq3fm2kdklehk545c5rgfxzfhe7ph5tt640cayu"
+const exampleXRPLAddress = 'r9RLXvWuRro3RX33pk4xsN58tefYZ8Tvbj';
+const someDogecoinAddress = 'njyMWWyh1L7tSX6QkWRgetMVCVyVtfoDta';
+const someBTCAddress = 'tb1qq3fm2kdklehk545c5rgfxzfhe7ph5tt640cayu';
 
 function toHex(data: string): string {
-    var result = "";
-    for (var i = 0; i < data.length; i++) {
-        result += data.charCodeAt(i).toString(16);
-    }
-    return "0x" + result.padEnd(64, "0");
+  var result = '';
+  for (var i = 0; i < data.length; i++) {
+    result += data.charCodeAt(i).toString(16);
+  }
+  return '0x' + result.padEnd(64, '0');
 }
 
 function fromHex(data: string): string {
-    data = data.replace(/^(0x\.)/, '');
-    return data
-        .split(/(\w\w)/g)
-        .filter(p => !!p)
-        .map(c => String.fromCharCode(parseInt(c, 16)))
-        .join('');
+  data = data.replace(/^(0x\.)/, '');
+  return data
+    .split(/(\w\w)/g)
+    .filter((p) => !!p)
+    .map((c) => String.fromCharCode(parseInt(c, 16)))
+    .join('');
 }
 
 async function prepareAttestationResponse(attestationType: string, network: string, sourceId: string, requestBody: any): Promise<AttestationResponse> {
-    const response = await fetch(
-        `${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`,
-        {
-            method: "POST",
-            headers: { "X-API-KEY": ATTESTATION_API_KEY as string, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                "attestationType": toHex(attestationType),
-                "sourceId": toHex(sourceId),
-                "requestBody": requestBody
-            })
-        }
-    );
-    const data = await response.json();
-    return data;
+  const response = await fetch(`${ATTESTATION_URL}/verifier/${network}/${attestationType}/prepareResponse`, {
+    method: 'POST',
+    headers: { 'X-API-KEY': ATTESTATION_API_KEY as string, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      attestationType: toHex(attestationType),
+      sourceId: toHex(sourceId),
+      requestBody: requestBody,
+    }),
+  });
+  const data = await response.json();
+  return data;
 }
 
 async function main() {
+  console.log(await prepareAttestationResponse('AddressValidity', 'xrp', 'testXRP', { addressStr: exampleXRPLAddress }));
+  console.log(await prepareAttestationResponse('AddressValidity', 'xrp', 'testXRP', { addressStr: '0xhahahahaha' }));
+  console.log(await prepareAttestationResponse('AddressValidity', 'xrp', 'testXRP', { addressStr: 'Hello world!' }));
 
-    console.log(
-        await prepareAttestationResponse("AddressValidity", "xrp", "testXRP",
-            { addressStr: exampleXRPLAddress })
-    )
-    console.log(
-        await prepareAttestationResponse("AddressValidity", "xrp", "testXRP",
-            { addressStr: "0xhahahahaha" })
-    )
-    console.log(
-        await prepareAttestationResponse("AddressValidity", "xrp", "testXRP",
-            { addressStr: "Hello world!" })
-    )
+  console.log(await prepareAttestationResponse('AddressValidity', 'btc', 'testBTC', { addressStr: someBTCAddress }));
+  console.log(await prepareAttestationResponse('AddressValidity', 'btc', 'testBTC', { addressStr: '0xhahahahaha' }));
+  console.log(await prepareAttestationResponse('AddressValidity', 'btc', 'testBTC', { addressStr: 'Hello world!' }));
 
-    console.log(
-        await prepareAttestationResponse("AddressValidity", "btc", "testBTC",
-            { addressStr: someBTCAddress })
-    )
-    console.log(
-        await prepareAttestationResponse("AddressValidity", "btc", "testBTC",
-            { addressStr: "0xhahahahaha" })
-    )
-    console.log(
-        await prepareAttestationResponse("AddressValidity", "btc", "testBTC",
-            { addressStr: "Hello world!" })
-    )
-
-    console.log(
-        await prepareAttestationResponse("AddressValidity", "doge", "testDOGE",
-            { addressStr: someDogecoinAddress })
-    )
-    console.log(
-        await prepareAttestationResponse("AddressValidity", "doge", "testDOGE",
-            { addressStr: "0xhahahahaha" })
-    )
-    console.log(
-        await prepareAttestationResponse("AddressValidity", "doge", "testDOGE",
-            { addressStr: "Hello world!" })
-    )
-
-
-
-
+  console.log(await prepareAttestationResponse('AddressValidity', 'doge', 'testDOGE', { addressStr: someDogecoinAddress }));
+  console.log(await prepareAttestationResponse('AddressValidity', 'doge', 'testDOGE', { addressStr: '0xhahahahaha' }));
+  console.log(await prepareAttestationResponse('AddressValidity', 'doge', 'testDOGE', { addressStr: 'Hello world!' }));
 }
 
-main().then(() => process.exit(0))
+main().then(() => process.exit(0));
 ```
+
 and the response
+
 ```json
 {
   status: 'VALID',
@@ -1590,13 +1504,13 @@ and the response
 
 One might ask what use is such an attestation type and why all the checks?
 Think of it in two ways:
+
 - The data contains request and response - this makes it possible to observe the input (request) and output (response) of the computation.
-This computation can be very complex and expensive, but for our purposes, we only need to know the result (and of course, the input we want to be observed) and we can act on it.
+  This computation can be very complex and expensive, but for our purposes, we only need to know the result (and of course, the input we want to be observed) and we can act on it.
 - The Merkle proof is then used to prove that the response was included in the committed root and thus was confirmed by the verifiers.
-The "being confirmed" part is important, as it means that the verifiers have indeed seen the request, ran the computation (and arrived at the same result) and included the result we base our actions on in the Merkle root.
+  The "being confirmed" part is important, as it means that the verifiers have indeed seen the request, ran the computation (and arrived at the same result) and included the result we base our actions on in the Merkle root.
 
-<!-- TODO: A lahko na to gledamo kot na ZK proof nekega izračuna? - a bi se dal iz tega čist lepo na ta AI dal vezat stvari - mogoče very simple classification a je nek address fishing al pa blacklisted kje? -->
-
+{/* <!-- TODO: A lahko na to gledamo kot na ZK proof nekega izračuna? - a bi se dal iz tega čist lepo na ta AI dal vezat stvari - mogoče very simple classification a je nek address fishing al pa blacklisted kje? --> */}
 
 ### Conclusion
 
@@ -1608,4 +1522,3 @@ In the next blogpost, we will see, how information from EVM chains can be relaye
 
 A word of warning, while it might be tempting to save the whole proof structure in your smart contract (if you want to do some later operations), this is terribly inefficient from gas standpoint as you are writing a lot of data to memory and decoding nested structures is expensive.
 But not only this, as the structures are nested, even operating on them when in memory (or copying them from `calldata` to `memory`) generates large bytecode, which makes contract deployment more expensive or even impossible if you pass the limit.
-
