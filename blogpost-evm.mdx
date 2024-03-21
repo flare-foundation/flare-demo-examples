@@ -278,7 +278,7 @@ Each event has the following fields:
 
 ## Usage examples
 
-Now we know how to request an attestation and what we are getting in return. Let's play around and see some examples.
+Now we know how to request an attestation and what we are getting in return, let's play around and see some examples.
 Examples are now a bit more involved and each of the examples will come in a few parts:
 
 - Script making a dummy transaction on `Sepolia` testnet.
@@ -293,7 +293,7 @@ Let's start small.
 We will create a smart contract that just tallies the toplevel amounts transferred to a designated address on sepolia.
 
 The scenario is pretty simple.
-We have a "payment" to externally-owned accounts (EOA - so not smart contract) on sepolia, and anyone can send funds there and prove this.
+We have a "payment" to Externally Owned Account (EOA - so not smart contract) on sepolia, and anyone can send funds there and prove this.
 On the Flare side, we will deploy a contract, which will accept proofs with data in the proper accounting format: who has sent how much to this end owner address.
 
 The full code for this example is in the `scripts/evm/trySimpleTransaction.ts`, `contracts/EthereumPaymentCollector.sol` and `contracts/FallbackContract` files.
@@ -906,9 +906,9 @@ Let's take a look at the test code and show a simple trick we have also hidden i
 The code is practically the same as before: We create a transaction, query the state connector, and use the data in the contract.
 But this time everything is done on the same (coston - `testSGB`) network.
 This makes it a bit easier to test, as we don't need to change the network, but it is a minor thing.
-It does sound strange (and pointless) to allow the State Connector to be used on the same network, but the main improvement comes from the toplevel relayer.
+It does sound strange (and pointless) to allow the State Connector to be used on the same network, but the main improvement comes from the toplevel relayer coming in the FSP.
 
-Once the State Connector is included in the toplevel protocol (for hackaton, a simple version of relay already exists), any State Connector data is immediately relayed to externally connected chains via relay (as is the FTSO data) and that means that external chains can also observe what is happening on Flare.
-Think about this: Up until now, we only relayed information from other chains to Flare, but now any example from the EVM part can immediatelly be replicated on the Sepolia chain with Flare being the source chain (where things happen).
+Once the State Connector is included in the toplevel protocol, any State Connector data is immediately relayed to externally connected chains via relay (as is the FTSO data) and that means that external chains can also observe what is happening on Flare.
+Think about this: Up until now, we only relayed information from other chains to Flare, but now any example from the EVM part can immediately be replicated on the Sepolia chain with Flare being the source chain (where things happen).
 
 {/* <!-- Meh: ### Contract creation --> */}
