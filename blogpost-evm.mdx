@@ -8,33 +8,33 @@ description: All about Flare and EVM connectivity.
 tags: [intermediate, state-connector, EVM, flare]
 ---
 
-So far, State Connector has allowed Flare to connect to a few other chains and gather different data.
-In the previous blogposts, we have learned, how state [connector works](https://TODO) and what kind of [different attestations](https://TODO) we can get from it.
+So far, the State Connector has allowed Flare to connect to a few other chains and gather different data.
+In the previous blogposts, we have learned, how the [State Connector](https://TODO) works and what kind of [different attestations](https://TODO) we can get from it.
 Attestations that we know so far are:
 
 - Simple payment
-- Non existence of a payment with reference
+- Non-existence of a payment with reference
 - Balance decreasing transaction
 - Block height confirmation
 - Address validity check
 
-and we know, that State connector allows Flare to connect to the following chains:
+and we know, that the State Connector allows Flare to connect to the following chains:
 
 - BTC
 - DOGE
 - XRP Ledger
 
-In this blogpost, we will uncover a new type of attestation and a new chain that Flare will be able to connect to, how to attest to such transactions and most importantly, what kind of data we can get from them.
-We are moving from the world of UTXO chains to the world of EVM chains wit a new `EVMTransaction` attestation type and two different chains: Ethereum and Flare (or testnets Sepolia and Coston2 for Coston testnet).
-This gives us a whole new set of possibilities, firstly the chain is now account based (as was XRP Ledger) and secondly, transactions on EVM chains can be much more complex as we enter the world of smart contracts.
+In this blogpost, we will uncover a new type of attestation and a new chain that Flare will be able to connect to, how to attest to such transactions and, most importantly, what kind of data we can get from them.
+We are moving from the world of UTXO chains to the world of EVM chains with a new `EVMTransaction` attestation type and two different chains: Ethereum and Flare (or testnets Sepolia and Coston2 for the Coston testnet).
+This approach gives us a whole new set of possibilities: Firstly, the chain is now account-based (as was XRP Ledger), and secondly, transactions on EVM chains can be much more complex as we enter the world of smart contracts.
 
-The information State Connector provides is similar as before (sender and recipient, amount, block, timestamp, etc.), but since we are on a smart chain now, we can also get additional things, namely, we are able to extract full data about events that were emitted during the transaction, and we can also get the input data of the transaction (in case a contract was called).
+The information that the State Connector provides is similar to what was provided before (sender and recipient, amount, block, timestamp, etc.), but since we are on a smart chain now, we can also get additional things, namely, we can extract the full data about events that were emitted during the transaction, and we can also get the input data of the transaction (in case a contract was called).
 
 ## Transaction Type
 
 Let's jump directly into the transaction type to see what kind of data we need to provide.
 
-The toplevel `Request` in the `EVMTransaction` has the same structure as others
+The toplevel `Request` in the `EVMTransaction` has the same structure as others:
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -157,7 +157,7 @@ interface EVMTransaction {
 }
 ```
 
-The `attestatationType` is for the evm attestation is hex encoding of `hexEncode("EVMTransaction")`
+The `attestatationType` for the evm attestation is a hex encoding of `hexEncode("EVMTransaction")`
 
 {/* Currently supported `sourceId` are */}
 
@@ -165,7 +165,7 @@ The `attestatationType` is for the evm attestation is hex encoding of `hexEncode
 
 ## Request Body
 
-The updated thing is `RequestBody` type defined as follows:
+The updated `RequestBody` is defined as follows:
 
 ```solidity
     /**
@@ -187,23 +187,23 @@ The updated thing is `RequestBody` type defined as follows:
     }
 ```
 
-- `TransactionHash`: Hash of the transaction we are observing
-- `RequiredConfirmations`: The number of blocks after the transaction we are requesting that must be visible to attestation client to consider this transaction as finalized.
-  In contrast with the previous payment (or block height) attestation where the amount of block confirmations was set per chain, this type is more liberal and allows us to choose how many confirmations we want and thus adapt our security assumptions (about the other chain).
+- `TransactionHash`: Hash of the transaction we are observing.
+- `RequiredConfirmations`: The number of blocks after the transaction that we are requesting that must be visible to the attestation client to consider this transaction as finalized.
+  In contrast with the previous payment (or block height) attestation, where the amount of block confirmations was set per chain, this type is more liberal and allows us to choose how many confirmations we want and thus adapt our security assumptions (about the other chain).
 - `provideInput`: If the response should also contain the input of the transaction.
-  We can always include the input, but this might produce large data struct that we will need to supply when using this transaction.
-  If you don't need to use this data it is advisable to not include it, as you incur additional gas cost both for supplying it to the verification contract and making a transaction.
-  Keep in mind, that it might be useful - for example to check what contract was deployed or what was the toplevel method, that was executed.
-- `listEvents`: Events are important and very powerful tool when interacting with EVM chains, but including them adds additional costs (the same as with input), so if you don't need events, you can save some gas costs by excluding them.
-- `logIndices`: An array of log indices (in any order, with repetitions allowed) for which events (logs) you want included as the result of your transaction attestation. As before - don't include events you don't need for gas reasons.
-  Importantly leaving this array empty will include all events emitted in the same order as they were emitted.
-  The indices are the block log indices, indicating the vent index in the whole block (not just the transactions you are attesting to), but if you supply index outside your transaction range, the corresponding event won't be included.
+  We can always include the input, but this might produce a large data struct that we will need to supply when using this transaction.
+  If you don't need to use this data, it is advisable to not include it, as you incur additional gas cost both for supplying it to the verification contract and making a transaction.
+  Keep in mind, that it might be useful, for example, to check what contract was deployed or what was the toplevel method that was executed.
+- `listEvents`: Events are an important and very powerful tool when interacting with EVM chains, but including them adds additional costs (the same as with input), so if you don't need events, you can save some gas costs by excluding them.
+- `logIndices`: An array of log indices (in any order, with repetitions allowed) for which events (logs) you want included as the result of your transaction attestation. As before, don't include events you don't need for gas reasons.
+  Importantly, leaving this array empty will include all events emitted in the same order as they were emitted.
+  The indices are the block log indices, indicating the event index in the whole block (not just the transactions you are attesting to), but if you supply an index outside your transaction range, the corresponding event won't be included.
   {/* (<!--TODO: link do definicije tega-->) */}
-  In any case, the amount of returned events is limited to 50, so if you want to attest, that you have included all the events in a single transaction, make sure it has 49 of them or less (in any case, what kind of transaction did you make to require 50 events?)
+  In any case, the amount of returned events is limited to 50, so if you want to attest that you have included all the events in a single transaction, make sure it has 49 of them or less (in any case, what kind of transaction did you make to require 50 events?).
 
 ## Response Body
 
-Let's see what a treasure trove of information EVM attestation type is
+Let's see what a treasure trove of information an EVM attestation type is:
 
 ```solidity
     /**
@@ -250,20 +250,20 @@ Let's see what a treasure trove of information EVM attestation type is
     }
 ```
 
-The response body struct contains the following fields
+The response body struct contains the following fields:
 
-- `blockNumber`: Number of the block in which the transaction is included
-- `timestamp`: Timestamp of the block the transaction was included in
+- `blockNumber`: Number of the block in which the transaction is included.
+- `timestamp`: Timestamp of the block the transaction was included in.
 - `sourceAddress`: Address signing the transaction.
-  Since Flare is EVM chain, this is nicely mapped to the address type directly, and we don't have to operate with strings or address hashes.
+  Since Flare is an EVM chain, this is nicely mapped to the address type directly, and we don't have to operate with strings or address hashes.
 - `isDeployment`: Flag indicating if this transaction was contract deployment.
-- ` receivingAddress`: The `to` address of the transaction (this is zero address if we are dealing with contract deployment).
-  Keep in mind, that this can also be contract address (if toplevel transaction is contract call) and this is where things get interesting.
+- ` receivingAddress`: The `to` address of the transaction (this is a zero address if we are dealing with contract deployment).
+  Keep in mind, that this can also be a contract address (if the toplevel transaction is a contract call) and this is where things get interesting.
 - `value`: The value (in wei) transferred by the toplevel transaction.
-  Values transferred by internal transactions are not tracked by this type - bit if proper events are emitted, you can use them to follow this.
-  If there is no value, the value has default `0` value.
-- `input`: The input provided with thins transaction (useful for contract calls), if no input is provided, a default value of zero bytes is used.
-- `status`: The status of the transaction, it can either be `1` indicating success or `0` indicating failure (without failure reason).
+  Values transferred by internal transactions are not tracked by this type, but if proper events are emitted you can use them to follow this.
+  If there is no value, the value has a default `0` value.
+- `input`: The input provided with a things transaction (useful for contract calls). If no input is provided, a default value of zero bytes is used.
+- `status`: The status of the transaction, which can either be `1` indicating success or `0` indicating failure (without failure reason).
 - `events`: Array of requested events in the same order as requested.
 
 Each event has the following fields:
@@ -272,42 +272,42 @@ Each event has the following fields:
 - `emitterAddress`: The address of the contract that emitted the event.
 - `topics`: An array of up to four 32-byte strings of indexed log arguments.
 - `data`: Concatenated 32-byte strings of non-indexed log arguments.
-  This (together with topics) is usually the part of event that you will decode to get the information you need.
-  Keep in mind, that this is event specific and you will need to know the event structure to decode it properly.
+  This (together with topics) is usually the part of an event that you will decode to get the information you need.
+  Keep in mind, that this is event-specific and you will need to know the event structure to decode it properly.
 - `removed`: It is `true` if the log was removed due to a chain reorganization (transaction was mined, but the block was not on the main chain) and `false` if it is a valid log.
 
 ## Usage examples
 
-Now we know how to request things the attestation and what we are getting in return, let's play around and see some examples.
+Now we know how to request an attestation and what we are getting in return. Let's play around and see some examples.
 Examples are now a bit more involved and each of the examples will come in a few parts:
 
 - Script making a dummy transaction on `Sepolia` testnet.
-- Smart contract(s) accepting attestation request and performing some desired action
+- Smart contract(s) accepting an attestation request and performing some desired action.
 - Deployment and run script, that ties them together.
 
-This deployment script will also allow us to explain exactly how long the waiting for each phase takes (something we have kinda hid until now).
+This deployment script will also allow us to explain exactly how long the waiting for each phase takes (something we have not focused on until now).
 
-### Simple transaction with value
+### Simple transaction with a value
 
 Let's start small.
-We will create a smart contract, that just tallies the toplevel amounts transferred to a designated address on sepolia.
+We will create a smart contract that just tallies the toplevel amounts transferred to a designated address on sepolia.
 
 The scenario is pretty simple.
-We have a "payment" to externally owned account (EOA - so not smart contract) on sepolia, and anyone can send funds there and prove this.
-On the Flare side, we will deploy a contract, that will accept proofs with data in do the proper accounting who has sent how much to this end owner address.
+We have a "payment" to externally-owned accounts (EOA - so not smart contract) on sepolia, and anyone can send funds there and prove this.
+On the Flare side, we will deploy a contract, which will accept proofs with data in the proper accounting format: who has sent how much to this end owner address.
 
 The full code for this example is in the `scripts/evm/trySimpleTransaction.ts`, `contracts/EthereumPaymentCollector.sol` and `contracts/FallbackContract` files.
 
 We won't be copy-pasting the full code here, but we will go through the most important parts.
 
-The setup is now in two parts, and `main` correctly picks up the right part to run depending on the network it is run on
+The setup is now in two parts, and `main` correctly picks up the right part to run depending on the network it is run on.
 
 We first run `yarn hardhat run scripts/evm/trySimpleTransaction --network sepolia` to deploy simple `FallbackContract` on Sepolia.
 This contract will just emit an event when the `fallback` function is called.
 We will be attesting to this event in the next part.
 The script makes two transactions on Sepolia, one with value to an address and one to the address of the contract.
 The second transaction will call the `fallback` function and emit the event.
-The transaction hashes are logged, and JSON response of the attestation results is printed (so we can see what we will get in the next part).
+The transaction hashes are logged, and the JSON response of the attestation results is printed (so we can see what we will get in the next part).
 
 Here is the example results:
 
@@ -380,27 +380,27 @@ Here is the example results:
 }
 ```
 
-After we have the transaction hashes, we copy them to the part of `main` method that will execute the state connector part, this time on Coston.
+After we have the transaction hashes, we copy them to the part of the `main` method that will execute the State Connector part, this time on Coston.
 Let's take a look at `executeStateConnectorProof`.
 
-Here, the state connector part comes into the play.
-You have already seen it in the previous blogposts, so we will just quickly glance through it.
-The code is bit more involved, as we now work with multiple transactions (this is not EVMTransaction specific, but it is a good example of how you can use the state connector to do more complex things).
-We again, get encoded attestation request (one for each transaction) and then we submit them to the state connector.
+Here, the State Connector part comes into play.
+You have already seen it in the previous blogposts, so we will just quickly scan through it.
+The code is a bit more involved, as we are now working with multiple transactions (this is not EVMTransaction specific, but it is a good example of how you can use the State Connector to do more complex things).
+Again, we get an encoded attestation request (one for each transaction) and then we submit them to the State Connector.
 Once this is done, we wait for the round to be confirmed (see the while loop that takes most of the time) and then we get the proof.
 
 The `EthereumPaymentCollector` contract is deployed on Coston with one important method `collectPayment`.
 This method accepts the `EVMTransaction.Proof` response and does the important accounting.
 
-As usual, we first check that the provided proof is correct - that the Merkle proof really attests that this transaction was included in Merkle tree.
+As usual, we first check that the provided proof is correct: that the Merkle proof really attests that this transaction was included in the Merkle tree.
 
-The comes the fun part, we can use the information from transaction to do whatever we want.
-We won't, just write it to the list of all transactions and be done.
+Then comes the fun part: we can use the information from a transaction to do whatever we want.
+We won't just write it to the list of all transactions and be done.
 But we will try to decode the event data and see what we can get from it.
 As said before, the event data is specific to the event and we need to know the event structure to decode it properly.
-In this case, we know how it looks like and the decoding is done by builtin `abi.decode`.
+In this case, we know how it looks and the decoding is done by the built-in `abi.decode`.
 We then just push the decoded data in struct form to the list of events and we are done.
-A word of caution, the `abi.decode` is not type safe and you can easily get wrong results if you don't know the event structure, even more, this might be a security risk if you are not careful (or revert unexpectedly), but it is a nice representation of how powerful the events - and their information - can be.
+A word of caution, the `abi.decode` is not type-safe and you can easily get wrong results if you don't know the event structure. Even more, this might be a security risk if you are not careful (or revert unexpectedly), but it is a nice representation of how powerful the events - and their information - can be.
 
 Finally, when we have both proofs and the contract deployed, we just call the `collectPayment` method with the proofs, and we are done (unless something goes wrong, then we will have to wait for the next round and try again).
 
@@ -508,16 +508,16 @@ https://coston-explorer.flare.network/address/0x7cf6E7aeFD0207a5bE9a7DbcDA560fc7
 ```
 
 An important thing to keep in mind is the following:
-On the previous attestation types, we were only able to get transaction in the last two days (this is attestation type specific).
+On the previous attestation types, we were only able to get transactions in the last two days (this is attestation type specific).
 
 ### Event emittance + decoding
 
-As already said, event will be the core feature of observing what is happening on other chains.
+As already said, an event will be the core feature for observing what is happening on other chains.
 Let's now use this to prove that an ERC20 payment was made on Sepolia and then decode the event to see who made the payment and how much.
 As before, we will deploy an ERC20 contract on Sepolia, mint some tokens and send them to an address.
 The full code is available in `scripts/evm/tryERC20transfers.ts` and `contracts/MintableERC20.sol` files.
 
-A sample response for the ERC20 transaction would look like this
+A sample response for the ERC20 transaction would look like this:
 
 ```json
 Sepolia USDT deployed to: 0x6023e19d70C304eA16a3728ceDcb042791737EC3
@@ -630,8 +630,8 @@ Let's now decode the data we got back and explore the event a little more into d
 }
 ```
 
-Each transaction has emitted a single event, and we can see that the `emitterAddress` is the address of the USDT contract - the one we want to observe.
-When processing the events it is important to know which contract should be emitting the event (you don't want to count a memecoin transfer as an USDT transfer).
+Each transaction has emitted a single event, and we can see that the `emitterAddress` is the address of the USDT contract, the one we want to observe.
+When processing the events, it is important to know which contract should be emitting the event (you don't want to count a memecoin transfer as a USDT transfer).
 The `topics` are the indexed arguments of the event, and the `data` is the non-indexed arguments.
 We glossed over this in the first part, but now this will be important.
 If we take a look at the event definition
@@ -640,8 +640,8 @@ If we take a look at the event definition
 event Transfer(address indexed from, address indexed to, uint256 value);
 ```
 
-we see, that it has three arguments, two indexed and one non-indexed.
-But there are three topics in the event, how do we interpret that.
+We see, that it has three arguments, two indexed and one non-indexed.
+But there are three topics in the event. How do we interpret that?
 Well in our case, the first one is the event signature, and the other two are the indexed arguments.
 Importantly, that is not always the case (it is the case for events that are emitted by Solidity contracts, but not necessarily for other contracts or direct assembly code).
 
@@ -657,23 +657,23 @@ The second event has the following data
 ```
 
 The first topic is the [event signature](https://www.4byte.directory/event-signatures/?bytes_signature=0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef), and the other two are the from and to addresses.
-You can easily see, how they are zero padded to accommodate the whole 32 bytes.
+You can easily see, how they are zero-padded to accommodate the whole 32 bytes.
 
-Similarly, the event in the first transaction that just minted 1000000 token wei (hex encoded in the data field) has the same zeroth topic, same recipient (topic with index 2) and zero address as sender.
+Similarly, the event in the first transaction that just minted 1000000 token wei (hex encoded in the data field) has the same zeroth topic, same recipient (topic with index 2), and zero address as sender.
 
-{/* <!-- This is good for future examples, but to much time consuming to do now --><!-- #### ERC20 payment --> */}
+{/* <!-- This is good for future examples, but too time consuming to do now --><!-- #### ERC20 payment --> */}
 
 Let's upgrade the contract from before to tally ERC20 payments on external chains.
-We do this by listening to events, decode them and use the decoded information
+We do this by listening to events, decoding them, and using the decoded information.
 
 #### Custom event
 
-Here, we will create a simple contract on Sepolia and follow the events it emits - just to see another example on how events function. -->
+Here, we will create a simple contract on Sepolia and follow the events it emits, just to see another example of how events function. -->
 
 ### Toplevel transaction + data decoding (allowance of erc20)
 
-We now know haw to listen to events (and decode them), let's see, how we can also decode toplevel transaction data.
-Here, we will check if the toplevel transaction really did increase the ERC20 allowance and see how to get toplevel calldata.
+We now know how to listen to events (and decode them). Let's see how we can also decode toplevel transaction data.
+Here, we will verify whether the toplevel transaction really did increase the ERC20 allowance and see how to get toplevel calldata.
 
 The full code for this example is in the `scripts/evm/tryERC20Allowance.ts` and `contracts/MintableERC20.sol` files.
 
@@ -723,10 +723,10 @@ The example response is something like this:
 Result(2) [ '0xFf02F742106B8a25C26e65C1f0d66BEC3C90d429', 1000n ]
 ```
 
-By now, you should be able to see, that the emitted event was the `Approval` event, and the data is the new allowance (with the correct participant addresses in the topics).
+By now, you should be able to see that the emitted event was the `Approval` event, and the data is the new allowance (with the correct participant addresses in the topics).
 
 What we want to take a look is the `input` field.
-It contains the call data of the toplevel transaction.
+It contains the calldata of the toplevel transaction.
 Since we know the signature of this method, we can easily decode it and get the result we expect.
 
 ### State observation through events
@@ -754,8 +754,8 @@ Any call to this contract will be forwarded to the target contract and the resul
 
 And the script is also relatively simple (though it does a lot of things).
 
-We get event in the same way as before, but now we also get the calldata and the target address.
-We need to do two things - first we decode the event to see what happened and then we decode the calldata to see what the state is.
+We get the event in the same way as before, but now we also get the calldata and the target address.
+We need to do two things: First, we decode the event to see what happened and then we decode the calldata to see what the state is.
 And then we decode both data bytes to see what we got.
 Importantly, it is necessary to know the structure of the event and the method we called to properly decode it.
 
@@ -815,7 +815,7 @@ Decoded calldata Result(2) [
 Decoded state data Result(1) [ 12345678n ]
 ```
 
-We can see that the event was emitted, and all the calldata was properly decoded.
+We can see that the event was emitted and all the calldata was properly decoded.
 Why is that important?
 Well it means, that we can now observe any state on the external blockchain without having to modify the contract on the external blockchain.
 This means, that we can easily observe USDT movements, current token balances...
@@ -823,21 +823,21 @@ This means, that we can easily observe USDT movements, current token balances...
 ### State observation and decoding
 
 The last example showed how we can observe the state on another blockchain and use it in typescript.
-Now, we will also see, how to properly decode the event in smart contract.
-We will use the same contract on chain as before to emit events `CallResult` and then decode them in the contract.
-The result will then be passed to the contract on Coston that will firstly decode the full event, make sure, that we called the correct function and then decode the returned data (which is the state we want to observe).
+Now, we will also see, how to properly decode the event in a smart contract.
+We will use the same contract on-chain as before to emit events, `CallResult`, and then decode them in the contract.
+The result will then be passed to the contract on Coston that will first decode the full event, make sure that we called the correct function, and then decode the returned data (which is the state we want to observe).
 
 The full contract that does this in the `contracts/ERC20BalanceMonitor.sol` and the accompanying script is in the `scripts/evm/tryStateCheckingAndSave.ts` file.
-What we want to do is simple - query the ERC20 balance of specific address and save it in the contract storage.
+What we want to do is simple: query the ERC20 balance of a specific address and save it in the contract storage.
 Here, you need to be careful, as this query is valid only at the time of the transaction, it might be different at the time of the block creation and confirmation.
 Plus keep in mind, that emitting an event means executing a transaction, and that means gas, so you should be careful with how often you do this.
 
-The process is the same as before, we invoke the contract, it emits the event ad we use the result to interact with the chain.
+The process is the same as before, we invoke the contract, it emits the event, and we use the result to interact with the chain.
 But this time we cheat a bit.
 Instead of waiting for the whole state connector process to finish, we use `getResponse` to get just the response without the proof.
 The `ERC20BalanceMonitor` then disregards the proof and just uses the response to process the data.
 
-Number of events can be quite large and processing all of them can be tedious (and error prone), so the easiest way is to find out which event is the one you want and add an index parameter to the function call.
+The number of events can be quite large and processing all of them can be tedious (and error prone), so the easiest way is to find out which event is the one you want and add an index parameter to the function call.
 Let's see the code
 
 ```solidity
@@ -894,21 +894,21 @@ function confirmBalanceEvent(EVMTransaction.Proof calldata transaction, address 
 ```
 
 We just ignore the proof - as said before, but then the fun part starts.
-We get the toplevel event out of the response - this is the one that contains calldata and return data, check that the topic matches and then decode the resulting data.
-Be careful, decoding the data might fail if we don't have the correct signature, so the example code if fine to show, but you might want to add more checks in production code.
+We get the toplevel event out of the response (this is the one that contains calldata and return data), check that the topic matches, and then decode the resulting data.
+Be careful, decoding the data might fail if we don't have the correct signature, so the example code is fine to show, but you might want to add more checks in production code.
 
-Once data of toplevel event is decoded, we simply check if the call data is what we expect and then decode the return data to get the balance - this is again dependent on what kind of return value we produced in the transaction.
-Again, the return data needs to be decoded - it might return something more complicated than just one uint256 - but it is easy to get the full result.
-Once we have all this - we just write it to the contract storage, and we are done.
+Once data of the toplevel event is decoded, we check if the call data is what we expect and then decode the return data to get the balance, which is again dependent on what kind of return value we produced in the transaction.
+Again, the return data needs to be decoded (t might return something more complicated than just one uint256), but it is easy to get the full result.
+Once we have all this, we just write it to the contract storage, and we are done.
 
-Let's take a look at the ts code and show a simple trick we have also hid in there.
+Let's take a look at the test code and show a simple trick we have also hidden in there.
 
-The code is practically the same as before - we create a transaction, query the state connector and use the data in the contract.
+The code is practically the same as before: We create a transaction, query the state connector, and use the data in the contract.
 But this time everything is done on the same (coston - `testSGB`) network.
 This makes it a bit easier to test, as we don't need to change the network, but it is a minor thing.
-It does sound strange (and pointless) to allow state connector to be used on the same network, but the main improvement comes from the toplevel relayer.
+It does sound strange (and pointless) to allow the State Connector to be used on the same network, but the main improvement comes from the toplevel relayer.
 
-Once state connector is included in the toplevel protocol (for hackaton a simple version of relay already exists), any state connector data is immediately relayed to externally connected chains via relay (as is the FTSO data) and that means, that external chains can also observe, wehat is happening on Flare.
-Think about this - up until now, we only relayed information from other chains to Flare, but now any example from the EVM part can immediatelly be replicated on Sepolia chain with Flare being the source chain (where things happen).
+Once the State Connector is included in the toplevel protocol (for hackaton, a simple version of relay already exists), any State Connector data is immediately relayed to externally connected chains via relay (as is the FTSO data) and that means that external chains can also observe what is happening on Flare.
+Think about this: Up until now, we only relayed information from other chains to Flare, but now any example from the EVM part can immediatelly be replicated on the Sepolia chain with Flare being the source chain (where things happen).
 
 {/* <!-- Meh: ### Contract creation --> */}
