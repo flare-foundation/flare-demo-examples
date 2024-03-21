@@ -1609,7 +1609,3 @@ In the next blogpost, we will see, how information from EVM chains can be relaye
 A word of warning, while it might be tempting to save the whole proof structure in your smart contract (if you want to do some later operations), this is terribly inefficient from gas standpoint as you are writing a lot of data to memory and decoding nested structures is expensive.
 But not only this, as the structures are nested, even operating on them when in memory (or copying them from `calldata` to `memory`) generates large bytecode, which makes contract deployment more expensive or even impossible if you pass the limit.
 
-
-### Other verifiers
-
-We used 
