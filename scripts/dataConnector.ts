@@ -1,11 +1,8 @@
 // import "dotenv/config";
 import flareLib = require("@flarenetwork/flare-periphery-contract-artifacts");
+const { ATTESTATION_URL, API_KEY } = process.env;
 import fetch from "node-fetch";
 import hardhat, { ethers } from "hardhat";
-
-// Constants
-const API_KEY = "123456";
-const ATTESTATION_URL = "https://attestation-coston.aflabs.net";
 
 // Simple hex encoding
 function toHex(data: any) {
@@ -38,7 +35,7 @@ async function prepareRequest() {
     {
       method: "POST",
       headers: {
-        "X-API-KEY": API_KEY,
+        "X-API-KEY": API_KEY as string,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestData),
@@ -113,3 +110,11 @@ async function getPreparedResponse() {
   console.log("Prepared response:", data);
   return data;
 }
+
+async function main() {
+  await prepareRequest();
+  await submitRequest();
+  await getPreparedResponse();
+}
+
+main().then(() => process.exit(0));
